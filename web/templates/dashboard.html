@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CyberGuard — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+<style>
+:root{--bg:#080c14;--s1:#0c1220;--s2:#111828;--brd:#1a2438;--t1:#e0e8f0;--t2:#6a7a8a;
+--grn:#00ff88;--red:#ff3355;--org:#ff8833;--ylw:#ffcc00;--blu:#3399ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Consolas,monospace;background:var(--bg);color:var(--t1);font-size:13px}
+a{color:var(--grn);text-decoration:none}
+.nav{display:flex;align-items:center;gap:20px;padding:10px 20px;background:var(--s1);
+border-bottom:1px solid var(--brd);position:sticky;top:0;z-index:99}
+.nav-brand{color:var(--grn);font-weight:700;font-size:1.1em;letter-spacing:3px}
+.nav-tabs{display:flex;gap:2px;margin-left:24px}
+.nav-tab{padding:6px 16px;color:var(--t2);cursor:pointer;border-radius:3px;transition:.15s;
+font-size:.75em;letter-spacing:1px;text-transform:uppercase}
+.nav-tab:hover{color:var(--t1);background:rgba(255,255,255,.04)}
+.nav-tab.active{color:var(--grn);background:rgba(0,255,136,.08)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:.75em;color:var(--t2)}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:p 2s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+.container{max-width:1440px;margin:0 auto;padding:16px}
+.section{display:none}.section.active{display:block}
+.row{display:grid;gap:12px;margin-bottom:12px}
+.r4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.r32{grid-template-columns:2fr 1fr}
+.r2{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.r2,.r32{grid-template-columns:1fr}}
+.card{background:var(--s1);border:1px solid var(--brd);border-radius:4px;padding:16px;overflow:hidden}
+.card-title{font-size:.7em;color:var(--t2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
+.metric{text-align:center;padding:12px 8px}
+.metric .v{font-size:2em;font-weight:700;line-height:1}
+.metric .l{font-size:.65em;color:var(--t2);margin-top:4px;letter-spacing:1px;text-transform:uppercase}
+.v-grn{color:var(--grn)}.v-red{color:var(--red)}.v-org{color:var(--org)}.v-ylw{color:var(--ylw)}.v-blu{color:var(--blu)}
+.tbl-wrap{overflow-x:auto;max-height:60vh;overflow-y:auto}
+table{width:100%;border-collapse:collapse}
+th{position:sticky;top:0;background:var(--s2);color:var(--t2);font-size:.65em;text-transform:uppercase;
+letter-spacing:1px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--brd)}
+td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.82em;white-space:nowrap}
+tr:hover{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;padding:1px 8px;border-radius:2px;font-size:.72em;font-weight:600}
+.b1{background:rgba(255,51,85,.15);color:var(--red)}.b2{background:rgba(255,136,51,.15);color:var(--org)}
+.b3{background:rgba(255,204,0,.12);color:var(--ylw)}.b4{background:rgba(51,153,255,.12);color:var(--blu)}
+.b5{background:rgba(255,255,255,.06);color:var(--t2)}
+.risk-bar{width:60px;height:6px;background:var(--s2);border-radius:3px;display:inline-block;vertical-align:middle;margin-right:6px}
+.risk-fill{height:100%;border-radius:3px}
+.btn-sm{padding:3px 10px;border:1px solid var(--brd);background:transparent;color:var(--t2);
+cursor:pointer;font-family:inherit;font-size:.72em;border-radius:2px;transition:.15s}
+.btn-sm:hover{border-color:var(--grn);color:var(--grn)}
+.feed{max-height:300px;overflow-y:auto;font-size:.78em}
+.feed-item{padding:6px 10px;border-left:2px solid var(--brd);margin-bottom:2px;background:rgba(255,255,255,.01);transition:background .3s}
+.feed-item.new{background:rgba(0,255,136,.08);border-left-color:var(--grn)}
+.feed-item .ts{color:var(--t2);font-size:.85em}
+</style>
+</head>
+<body>
+<div class="nav">
+<div class="nav-brand">⛨ CYBERGUARD</div>
+<div class="nav-tabs">
+<div class="nav-tab active" data-t="overview">Overview</div>
+<div class="nav-tab" data-t="alerts">Alerts</div>
+<div class="nav-tab" data-t="inventory">Inventory</div>
+<div class="nav-tab" data-t="dns">DNS</div>
+<div class="nav-tab" data-t="system">System</div>
+</div>
+<div class="nav-right"><div class="pulse"></div><span id="pps">—</span> pkt/s
+<span style="margin-left:8px" id="clock">—</span>
+<a href="/logout" style="margin-left:12px;color:var(--t2)">⏻</a></div>
+</div>
+<div class="container">
+
+<div class="section active" id="s-overview">
+<div class="row r4">
+<div class="card metric"><div class="v v-red" id="m-crit">—</div><div class="l">Critical</div></div>
+<div class="card metric"><div class="v v-org" id="m-high">—</div><div class="l">High</div></div>
+<div class="card metric"><div class="v v-grn" id="m-hosts">—</div><div class="l">Active Hosts</div></div>
+<div class="card metric"><div class="v v-blu" id="m-ports">—</div><div class="l">Open ports</div></div>
+<div class="card metric"><div class="v v-ylw" id="m-scan">—</div><div class="l">Scanners</div></div>
+<div class="card metric"><div class="v v-org" id="m-bcn">—</div><div class="l">Beacons</div></div>
+</div>
+<div class="row r32">
+<div class="card"><div class="card-title">Real-time Flows</div>
+<div class="feed" id="live-feed"><div style="color:var(--t2);padding:20px;text-align:center">Waiting for events…</div></div></div>
+<div class="card"><div class="card-title">At-risk Hosts</div>
+<div class="tbl-wrap"><table><thead><tr><th>IP</th><th>Risk</th><th>OS</th></tr></thead>
+<tbody id="risk-hosts"></tbody></table></div></div>
+</div>
+</div>
+
+<div class="section" id="s-alerts"><div class="card"><div class="card-title">Journal</div>
+<div class="tbl-wrap" style="max-height:75vh"><table>
+<thead><tr><th>Time</th><th>Sev.</th><th>Source</th><th>Category</th><th>Title</th><th>IP</th><th>IOC</th><th></th></tr></thead>
+<tbody id="alert-tbl"></tbody></table></div></div></div>
+
+<div class="section" id="s-inventory"><div class="card"><div class="card-title">Network</div>
+<div class="tbl-wrap" style="max-height:75vh"><table>
+<thead><tr><th>IP</th><th>Hostname</th><th>MAC</th><th>Vendor</th><th>OS</th><th>Risk</th><th>Ports</th><th>Seen</th><th>Status</th></tr></thead>
+<tbody id="host-tbl"></tbody></table></div></div></div>
+
+<div class="section" id="s-dns"><div class="card"><div class="card-title">Suspicious DNS (entropy ≥ 3.5)</div>
+<div class="tbl-wrap" style="max-height:75vh"><table>
+<thead><tr><th>Time</th><th>Source</th><th>Query</th><th>Entropy</th></tr></thead>
+<tbody id="dns-tbl"></tbody></table></div></div></div>
+
+<div class="section" id="s-system">
+<div class="row r4">
+<div class="card metric"><div class="v" id="sys-cpu">—</div><div class="l">CPU %</div></div>
+<div class="card metric"><div class="v" id="sys-ram">—</div><div class="l">RAM %</div></div>
+<div class="card metric"><div class="v" id="sys-pkts">—</div><div class="l">Packets</div></div>
+<div class="card metric"><div class="v v-grn" id="sys-mbps">—</div><div class="l">Mbit/s</div></div>
+</div>
+<div class="row r2">
+<div class="card"><div class="card-title">Baseline</div><div class="tbl-wrap"><table>
+<thead><tr><th>Metric</th><th>Value</th><th>σ</th><th>Samp.</th></tr></thead>
+<tbody id="bl-tbl"></tbody></table></div></div>
+<div class="card"><div class="card-title">Interfaces</div><div class="tbl-wrap"><table>
+<thead><tr><th>Iface</th><th>IP</th><th>MAC</th><th>Status</th></tr></thead>
+<tbody id="net-tbl"></tbody></table></div></div>
+</div></div>
+
+</div>
+<script>
+document.querySelectorAll('.nav-tab').forEach(t=>{t.onclick=()=>{
+document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
+document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
+t.classList.add('active');document.getElementById('s-'+t.dataset.t).classList.add('active');}});
+const SB={1:'b1',2:'b2',3:'b3',4:'b4',5:'b5'},SL={1:'CRIT',2:'HIGH',3:'MED',4:'LOW',5:'INFO'};
+const fmt=i=>{if(!i)return'—';const d=new Date(i);return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+const fmtD=i=>{if(!i)return'—';const d=new Date(i);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit'})+' '+fmt(i)};
+function rb(s){const c=s>=70?'var(--red)':s>=40?'var(--org)':s>=10?'var(--ylw)':'var(--grn)';
+return`<span class="risk-bar"><span class="risk-fill" style="width:${s}%;background:${c}"></span></span>${s}`;}
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
+
+async function fetchOv(){try{const r=await fetch('/api/overview'),d=await r.json();
+document.getElementById('m-crit').textContent=d.alerts.crit;
+document.getElementById('m-high').textContent=d.alerts.high;
+document.getElementById('m-hosts').textContent=d.network.hosts_up;
+document.getElementById('m-ports').textContent=d.network.open_ports;
+if(d.threats){document.getElementById('m-scan').textContent=d.threats.active_scanners||0;
+document.getElementById('m-bcn').textContent=d.threats.beacon_pairs||0;
+document.getElementById('risk-hosts').innerHTML=(d.threats.top_risk_hosts||[]).map(h=>
+`<tr><td>${h.ip}</td><td>${rb(h.score)}</td><td>${h.os||'—'}</td></tr>`).join('')||
+'<tr><td colspan=3 style="color:var(--t2)">None</td></tr>';}
+if(d.sniffer){document.getElementById('pps').textContent=d.sniffer.pps||0;
+document.getElementById('sys-pkts').textContent=(d.sniffer.packets||0).toLocaleString();
+document.getElementById('sys-mbps').textContent=d.sniffer.mbps||0;}
+}catch(e){}}
+
+async function fetchAl(){try{const r=await fetch('/api/alerts?limit=200'),data=await r.json();
+document.getElementById('alert-tbl').innerHTML=data.map(a=>
+`<tr><td>${fmtD(a.ts)}</td><td><span class="badge ${SB[a.severity]}">${SL[a.severity]}</span></td>
+<td>${a.source}</td><td>${a.category||''}</td><td>${a.title.substring(0,70)}</td>
+<td style="font-size:.75em">${a.src_ip||''}${a.dst_ip?' → '+a.dst_ip:''}</td>
+<td style="font-size:.7em;max-width:120px;overflow:hidden;text-overflow:ellipsis">${a.ioc||''}</td>
+<td>${a.ack?'✓':'<button class="btn-sm" onclick="ack('+a.id+')">Ack</button>'}</td></tr>`).join('');}catch(e){}}
+
+async function ack(id){await fetch('/api/alerts/'+id+'/ack',{method:'POST'});fetchAl();}
+
+async function fetchH(){try{const r=await fetch('/api/hosts'),data=await r.json();
+document.getElementById('host-tbl').innerHTML=data.map(h=>
+`<tr><td><strong>${h.ip}</strong></td><td>${h.hostname||'—'}</td>
+<td style="font-size:.75em">${h.mac||'—'}</td><td>${h.vendor||'—'}</td>
+<td>${h.os||'—'}</td><td>${rb(h.risk)}</td>
+<td>${h.ports.map(p=>'<span class="badge b4" style="margin:1px">'+p.port+'</span>').join(' ')}</td>
+<td style="font-size:.75em">${fmtD(h.last)}</td>
+<td>${h.status==='up'?'<span style="color:var(--grn)">●</span>':'<span style="color:var(--red)">●</span>'} ${h.status}</td></tr>`).join('');}catch(e){}}
+
+async function fetchDns(){try{const r=await fetch('/api/dns?suspicious=1&limit=100'),data=await r.json();
+document.getElementById('dns-tbl').innerHTML=data.map(d=>
+`<tr><td>${fmtD(d.ts)}</td><td>${d.src}</td>
+<td style="font-size:.75em;max-width:400px;overflow:hidden;text-overflow:ellipsis">${d.query}</td>
+<td><span class="badge ${d.entropy>=4?'b1':'b2'}">${d.entropy.toFixed(2)}</span></td></tr>`).join('')
+||'<tr><td colspan=4 style="color:var(--t2)">None</td></tr>';}catch(e){}}
+
+async function fetchSys(){try{const r=await fetch('/api/health'),d=await r.json();
+if(d.system){const s=d.system;
+document.getElementById('sys-cpu').textContent=s.cpu_percent+'%';
+document.getElementById('sys-cpu').className='v '+(s.cpu_percent>80?'v-red':s.cpu_percent>60?'v-org':'v-grn');
+document.getElementById('sys-ram').textContent=s.memory_percent+'%';
+document.getElementById('sys-ram').className='v '+(s.memory_percent>85?'v-red':'v-grn');}
+if(d.network){document.getElementById('net-tbl').innerHTML=Object.entries(d.network).map(([n,i])=>
+`<tr><td>${n}</td><td>${i.ip||'—'}</td><td style="font-size:.75em">${i.mac||'—'}</td>
+<td>${i.up?'<span style="color:var(--grn)">UP</span>':'<span style="color:var(--red)">DOWN</span>'}</td></tr>`).join('');}
+}catch(e){}
+try{const r=await fetch('/api/baseline'),data=await r.json();
+document.getElementById('bl-tbl').innerHTML=data.map(b=>
+`<tr><td>${b.key}</td><td>${b.value}</td><td>±${b.std}</td><td>${b.samples}</td></tr>`).join('')
+||'<tr><td colspan=4 style="color:var(--t2)">Learning…</td></tr>';}catch(e){}}
+
+const socket=io('/live',{transports:['websocket','polling']});
+const feed=document.getElementById('live-feed');let fi=false;
+socket.on('alert',function(a){if(!fi){feed.innerHTML='';fi=true;}
+const el=document.createElement('div');el.className='feed-item new';
+el.innerHTML=`<span class="badge ${SB[a.severity]}">${SL[a.severity]}</span> <span class="ts">${fmt(a.ts)}</span> <strong>${a.source}</strong> ${a.title}${a.src_ip?' <span style="color:var(--t2);font-size:.8em">'+a.src_ip+'</span>':''}`;
+feed.prepend(el);setTimeout(()=>el.classList.remove('new'),3000);
+if(feed.children.length>100)feed.lastChild.remove();fetchOv();});
+
+function all(){fetchOv();fetchAl();fetchH();fetchDns();fetchSys();}
+all();setInterval(all,15000);
+</script>
+</body>
+</html>

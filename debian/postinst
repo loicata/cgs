@@ -1,0 +1,217 @@
+#!/bin/bash
+set -e
+
+G='\033[0;32m';C='\033[0;36m';R='\033[0;31m';Y='\033[0;33m';B='\033[1m';N='\033[0m'
+
+APP=/opt/cyberguard
+CONF_DIR=/etc/cyberguard
+CONF=$CONF_DIR/config.yaml
+DATA=/var/lib/cyberguard/data
+LOG=/var/log/cyberguard
+STAGING=/var/tmp/cyberguard-install-$$
+STATE_FILE="$APP/.install_state"
+
+rollback() {
+    EXIT_CODE=$?
+    if [ -f "$STATE_FILE" ] && grep -q "COMMITTED" "$STATE_FILE" 2>/dev/null; then return 0; fi
+    echo ""
+    echo -e "${R}${B}════════════════════════════════════════════════${N}"
+    echo -e "${R}${B}  ⚠  Installation interrupted — Rolling back${N}"
+    echo -e "${R}${B}════════════════════════════════════════════════${N}"
+    echo ""
+    [ -d "$STAGING" ] && echo -e "${R}  Removing staging directory…${N}" && rm -rf "$STAGING"
+    if [ -f "$STATE_FILE" ] && grep -q "VENV_CREATED" "$STATE_FILE" 2>/dev/null; then
+        echo -e "${R}  Removing virtualenv…${N}"; rm -rf "$APP/venv"
+    fi
+    if [ -f "$STATE_FILE" ] && grep -q "SSL_CREATED" "$STATE_FILE" 2>/dev/null; then
+        echo -e "${R}  Removing SSL certificate…${N}"; rm -f "$APP/ssl/cert.pem" "$APP/ssl/key.pem"
+    fi
+    if [ -f "$STAGING.conf.bak" ]; then
+        echo -e "${R}  Restoring original configuration…${N}"; cp "$STAGING.conf.bak" "$CONF" 2>/dev/null || true; rm -f "$STAGING.conf.bak"
+    fi
+    echo "ROLLED_BACK $(date -Iseconds)" > "$STATE_FILE" 2>/dev/null || true
+    echo ""
+    echo -e "${R}  Rollback complete. System restored to pre-install state.${N}"
+    echo -e "${R}  To reinstall: ${B}sudo dpkg --configure cyberguard-sentinel${N}"
+    echo -e "${R}  Or run      : ${B}sudo apt install --fix-broken${N}"
+    echo ""
+    exit ${EXIT_CODE:-1}
+}
+
+trap rollback SIGHUP SIGINT SIGTERM ERR
+
+echo ""
+echo -e "${C}${B}⛨  CyberGuard Sentinel — Transactional installer${N}"
+echo -e "${C}   SSH disconnect protection enabled${N}"
+echo ""
+
+mkdir -p "$APP" "$APP/data" "$CONF_DIR" "$DATA" "$LOG" "$LOG/forensics" "$LOG/snapshots" "$LOG/backups"
+echo "STARTED $(date -Iseconds)" > "$STATE_FILE"
+
+INSTALL_MODE="compat"; PYTHON_CMD="python3"; PRETTY_NAME="Debian-based"; PY_VERSION="3.x"
+if [ -f "$APP/.install_mode" ]; then . "$APP/.install_mode"; fi
+echo -e "  System : ${B}$PRETTY_NAME${N} (mode ${B}$INSTALL_MODE${N})"
+echo -e "  Python : ${B}$PY_VERSION${N} ($PYTHON_CMD)"
+echo ""
+
+[ -f "$CONF" ] && cp "$CONF" "$STAGING.conf.bak"
+
+mkdir -p "$STAGING"
+
+# ── 1. System dependencies ──
+echo -e "${C}[1/7]${N} System dependencies…"
+apt-get update -qq 2>/dev/null || true
+if ! dpkg -l nmap 2>/dev/null | grep -q "^ii"; then
+    echo -e "      Installing ${B}nmap${N}…"
+    apt-get install -y -qq nmap 2>/dev/null || echo -e "      ${Y}⚠ nmap not installed — scapy-only mode${N}"
+fi
+MISSING=""
+for pkg in whois traceroute; do dpkg -l "$pkg" 2>/dev/null | grep -q "^ii" || MISSING="$MISSING $pkg"; done
+[ -n "$MISSING" ] && echo -e "      Installing:${B}$MISSING${N}" && apt-get install -y -qq $MISSING 2>/dev/null || true
+echo -e "  ${G}✓${N} System dependencies"
+
+# ── 2. Virtualenv ──
+echo -e "${C}[2/7]${N} Creating virtualenv (staging)…"
+VENV_STAGING="$STAGING/venv"
+"$PYTHON_CMD" -m venv "$VENV_STAGING" 2>/dev/null || \
+"$PYTHON_CMD" -m venv "$VENV_STAGING" --system-site-packages 2>/dev/null || {
+    echo -e "  ${R}ERROR: venv creation failed.${N}"; exit 1; }
+if [ ! -f "$VENV_STAGING/bin/pip" ]; then
+    "$VENV_STAGING/bin/python3" -c "import ensurepip;ensurepip.bootstrap()" 2>/dev/null || \
+    curl -sSL https://bootstrap.pypa.io/get-pip.py | "$VENV_STAGING/bin/python3" 2>/dev/null || true
+fi
+"$VENV_STAGING/bin/pip" install --upgrade pip -q 2>/dev/null || true
+echo -e "  ${G}✓${N} Virtualenv ready"
+
+# ── 3. Python libraries ──
+echo -e "${C}[3/7]${N} Installing Python libraries…"
+echo -e "      ${Y}(this may take 2-5 min depending on connection)${N}"
+"$VENV_STAGING/bin/pip" install -r "$APP/requirements.txt" -q 2>&1 | tail -5 || {
+    echo -e "      ${Y}⚠ Some packages failed, trying one by one…${N}"
+    while IFS= read -r line; do
+        line=$(echo "$line" | sed 's/#.*//' | xargs); [ -z "$line" ] && continue
+        "$VENV_STAGING/bin/pip" install "$line" -q 2>/dev/null || echo -e "      ${Y}⚠ $line failed${N}"
+    done < "$APP/requirements.txt"
+}
+FAIL=0
+for mod in scapy.all flask bcrypt peewee yaml psutil schedule; do
+    "$VENV_STAGING/bin/python3" -c "import $mod" 2>/dev/null || { FAIL=$((FAIL+1)); echo -e "      ${Y}⚠ $mod missing${N}"; }
+done
+[ "$FAIL" -gt 3 ] && echo -e "  ${R}Too many missing modules ($FAIL). Aborting.${N}" && exit 1
+echo -e "  ${G}✓${N} Libraries installed ($((7-FAIL))/7 OK)"
+
+# ── 4. Configuration ──
+echo -e "${C}[4/7]${N} Configuration…"
+if grep -q 'password_hash: ""' "$CONF" 2>/dev/null || [ ! -s "$CONF" ]; then
+    echo ""; echo -e "  ${B}Launching configuration wizard…${N}"; echo ""
+    "$VENV_STAGING/bin/python3" "$APP/cli.py" -c "$CONF" setup --first-install || {
+        echo -e "  ${Y}⚠ Wizard failed — using default configuration.${N}"
+        H=$("$VENV_STAGING/bin/python3" -c "import bcrypt;print(bcrypt.hashpw(b'cyberguard',bcrypt.gensalt()).decode())" 2>/dev/null)
+        [ -n "$H" ] && "$VENV_STAGING/bin/python3" -c "
+import yaml
+with open('$CONF') as f: c=yaml.safe_load(f) or {}
+c.setdefault('web',{})['password_hash']='$H'
+c.setdefault('web',{})['username']='admin'
+c.setdefault('general',{})['data_dir']='$DATA'
+c['general']['log_dir']='$LOG'
+with open('$CONF','w') as f: yaml.dump(c,f,default_flow_style=False,allow_unicode=True)"
+        echo -e "  ${Y}Default login: admin / cyberguard${N}"; }
+else
+    echo -e "  ${G}✓${N} Existing configuration preserved"
+fi
+
+# ── 5. TLS certificate ──
+echo -e "${C}[5/7]${N} TLS certificate…"
+CERT="/etc/cyberguard/tls/sentinel.crt"; KEY="/etc/cyberguard/tls/sentinel.key"
+mkdir -p "$(dirname $CERT)" "$APP/ssl" "$APP/reports"
+if [ ! -f "$CERT" ]; then
+    openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" \
+        -days 3650 -nodes -batch -subj "/CN=CyberGuard Sentinel" 2>/dev/null && {
+        chmod 600 "$KEY" "$CERT"; echo "SSL_CREATED" >> "$STATE_FILE"
+        "$VENV_STAGING/bin/python3" -c "
+import yaml
+with open('$CONF') as f: c=yaml.safe_load(f) or {}
+c.setdefault('web',{})['ssl_cert']='$CERT'
+c['web']['ssl_key']='$KEY'
+with open('$CONF','w') as f: yaml.dump(c,f,default_flow_style=False,allow_unicode=True)" 2>/dev/null
+        echo -e "  ${G}✓${N} Self-signed certificate generated"
+    } || echo -e "  ${Y}⚠ openssl not found — no certificate${N}"
+else
+    echo -e "  ${G}✓${N} Existing certificate"
+fi
+
+# ── 6. Systemd service ──
+echo -e "${C}[6/7]${N} Systemd service…"
+SVCFILE="/usr/lib/systemd/system/cyberguard-sentinel.service"; V="$APP/venv"
+cat > "$STAGING/cyberguard-sentinel.service" << SVCEOF
+[Unit]
+Description=CyberGuard Sentinel — Active Network Defense
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$APP
+ExecStart=$V/bin/python3 $APP/cli.py -c $CONF start
+TimeoutStopSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65536
+TasksMax=256
+MemoryMax=2G
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+SyslogIdentifier=cyberguard-sentinel
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+echo -e "  ${G}✓${N} Service created"
+
+# ── 7. Commit ──
+echo -e "${C}[7/7]${N} Commit…"
+if [ -d "$APP/venv" ]; then rm -rf "$APP/venv.old" 2>/dev/null; mv "$APP/venv" "$APP/venv.old" 2>/dev/null || true; fi
+mv "$VENV_STAGING" "$APP/venv"; echo "VENV_CREATED" >> "$STATE_FILE"; rm -rf "$APP/venv.old" 2>/dev/null || true
+cp "$STAGING/cyberguard-sentinel.service" "$SVCFILE"
+chmod 750 "$APP" "$DATA" "$LOG" "$APP/data"
+chmod 640 "$CONF" 2>/dev/null || true
+systemctl daemon-reload
+rm -rf "$STAGING"; rm -f "$STAGING.conf.bak"
+echo "COMMITTED $(date -Iseconds)" > "$STATE_FILE"
+trap - SIGHUP SIGINT SIGTERM ERR
+
+FW="iptables"; command -v nft &>/dev/null && nft list tables &>/dev/null 2>&1 && FW="nftables"
+
+# Auto-start and enable service
+systemctl enable cyberguard-sentinel 2>/dev/null || true
+systemctl start cyberguard-sentinel 2>/dev/null || true
+
+# Open firewall port
+if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "active"; then
+    ufw allow 8443/tcp 2>/dev/null || true
+fi
+
+# Get server IP for display
+SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[ -z "$SERVER_IP" ] && SERVER_IP="<IP>"
+
+echo ""
+echo -e "${G}${B}  =================================================${N}"
+echo -e "${G}${B}    CyberGuard Sentinel v2.2.3 — Installed${N}"
+echo -e "${G}${B}  =================================================${N}"
+echo ""
+echo -e "  System   : ${B}$PRETTY_NAME${N} ($INSTALL_MODE)"
+echo -e "  Python   : ${B}$PY_VERSION${N}"
+echo -e "  Firewall : ${B}$FW${N} (port 8443 opened)"
+echo -e "  Status   : ${G}${B}running${N}"
+echo ""
+echo -e "  ${B}https://${SERVER_IP}:8443${N}  (web dashboard)"
+echo ""
+echo -e "  ${C}SSH administration:${N}"
+echo -e "  ${B}sudo cyberguard console${N}    Interactive console"
+echo -e "  ${B}sudo cyberguard setup${N}      Reconfigure"
+echo -e "  ${B}sudo cyberguard status${N}     System status"
+echo ""

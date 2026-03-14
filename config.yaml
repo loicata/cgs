@@ -1,0 +1,310 @@
+# ═══════════════════════════════════════════════
+# CyberGuard Sentinel v1.2 — Configuration
+# Active defense server with incident response
+# ═══════════════════════════════════════════════
+
+general:
+  run_as_user: "cyberguard"            # Drop privileges to this user after binding raw sockets
+  data_dir: /opt/cyberguard/data
+  log_dir: /var/log/cyberguard
+  log_level: INFO
+
+network:
+  subnets:
+    - "192.168.1.0/24"
+  interface: auto
+  exclude_ips:
+    - "192.168.1.1"
+    - "192.168.1.100"
+
+# ── Suricata ingestion (OPTIONAL) ──
+# CyberGuard works perfectly without Suricata.
+# Sans Suricata, it uses its own analysis engine (scapy).
+# Si vous avez un firewall Suricata, configurez UN des modes ci-dessous :
+suricata:
+  eve_file: ""                         # Mode fichier : /mnt/firewall/eve.json
+  syslog_port: ""                      # Mode syslog UDP : 5514
+  tcp_port: ""                         # Mode TCP stream : 5515
+
+# ── Network discovery ──
+discovery:
+  arp_interval: 300
+  port_scan_interval: 3600
+  top_ports: [21,22,23,25,53,80,110,135,139,143,443,445,993,995,
+              1433,1521,3306,3389,5432,5900,6379,8080,8443,27017]
+  service_detection: true
+  os_fingerprint: true
+  use_nmap: true                       # true = use nmap (installed by default)
+                                       # false = scapy-only mode (nmap removed)
+
+# ── Packet capture ──
+sniffer:
+  enabled: true
+  promiscuous: true
+  bpf_filter: ""
+
+# ── Analysis (thresholds) ──
+analysis:
+  portscan_threshold: 15
+  bruteforce_threshold: 10
+  bruteforce_window: 60
+  beacon_tolerance: 0.15
+  dns_entropy_threshold: 3.5
+  exfil_mb: 100
+  new_service_alert: true
+
+# ── Active defense ──
+defense:
+  enabled: true
+
+  # Operating mode:
+  #   "confirmation" = admin must approve before defense actions (default, safest)
+  #   "immediate"    = Sentinel acts instantly, then informs admin with rollback option
+  mode: "confirmation"
+
+  auto_block: true
+  auto_block_severity: 1
+  alert_count_threshold: 5
+  alert_count_window: 300
+  block_ttl_seconds: 3600
+  rate_limit_ttl_seconds: 1800
+  quarantine_ttl_seconds: 7200
+  whitelist_ips:
+    - "192.168.1.1"
+    - "192.168.1.100"
+    - "8.8.8.8"
+    - "1.1.1.1"
+  # Whitelist par MAC (survives DHCP changes)
+  whitelist_macs: []
+    # - "aa:bb:cc:dd:ee:ff"
+
+# ══════════════════════════════════════════════════
+# EMAIL NOTIFICATIONS — Incident response
+# ══════════════════════════════════════════════════
+email:
+  enabled: false                       # ← Activer quand SMTP configured
+
+  # SMTP server
+  smtp_server: "smtp.entreprise.com"   # Ex: smtp.gmail.com, smtp.office365.com
+  smtp_port: 587                       # 587 = STARTTLS, 465 = SSL, 25 = non encrypted
+  smtp_tls: true
+  smtp_user: "sentinel@entreprise.com"
+  smtp_password: "MOT_DE_PASSE_SMTP"
+
+  # Sender
+  from_address: "CyberGuard Sentinel <sentinel@entreprise.com>"
+
+  # Sentinel URL (used in email links)
+  sentinel_url: "https://192.168.1.100:8443"   # ← This server's IP
+
+  # Timeout de confirmation admin
+  approval_timeout_minutes: 15
+  timeout_auto_approve: false
+
+  # Surveillance extinction du poste
+  shutdown_check_interval: 10          # Seconds between each check
+  token_ttl_seconds: 3600              # Approval link expiration (1 hour)
+  shutdown_max_wait_minutes: 30        # Abandon si le poste ne s'shutdown pas
+
+  # Security contact (shown in user email)
+  security_contact: "the IT security team (poste 1234)"
+
+  # Admin report content after incident
+  # ⚠ Legal information below is adapted to the configured country.
+  #    Supported countries : IE (Ireland), FR (France), US (United States)
+  country: "IE"                        # IE = Ireland, FR = France, US = United States
+  include_legal_info: true             # Include complaint filing contacts
+  attach_forensic_file: true           # Attach forensic JSON file
+
+  # Administrators (receive ALL alerts and reports)
+  admin_emails:
+    - "admin@entreprise.com"
+    - "securite@entreprise.com"
+
+  # ── User directory ──
+  # Associates each host IP with a user email.
+  # When a threat targets this host, the user receives:
+  #   1. An alert email asking to shut down
+  #   2. A report: threat resolved or residual risk
+  # ── User directory ──
+  # Associates each host with an email. Use MAC in addition to IP
+  # to survive DHCP changes.
+  user_directory:
+    - ip: "192.168.1.10"
+      mac: ""                          # ex: "aa:bb:cc:dd:ee:ff" (optional but recommended)
+      name: "Jean Dupont"
+      email: "jean.dupont@entreprise.com"
+      hostname: "PC-JEAN"
+
+    - ip: "192.168.1.11"
+      name: "Marie Martin"
+      email: "marie.martin@entreprise.com"
+      hostname: "PC-MARIE"
+
+    - ip: "192.168.1.12"
+      name: "Pierre Durand"
+      email: "pierre.durand@entreprise.com"
+      hostname: "LAPTOP-PIERRE"
+
+    # Add as many entries as needed
+    # - ip: "192.168.1.XX"
+    #   name: "First Last"
+    #   email: "prenom.nom@entreprise.com"
+    #   hostname: "NOM-PC"
+
+# ── Alertes internes (webhook, syslog) ──
+alerts:
+  cooldown_seconds: 300
+  max_per_hour: 120
+  webhook:
+    enabled: false
+    # url: "https://hooks.slack.com/services/XXX"
+  syslog:
+    enabled: true
+
+# ── Web interface ──
+web:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8443
+  secret: ""                             # Auto-generated if empty (recommended)
+  username: admin
+  password_hash: ""
+
+  # TLS certificate (auto-generated if missing)
+  ssl_cert: "/etc/cyberguard/tls/sentinel.crt"
+  ssl_key: "/etc/cyberguard/tls/sentinel.key"
+
+  # Session security
+  session_timeout_minutes: 30            # Inactive session expires after this
+
+  # Login lockout
+  max_login_attempts: 5                  # Lock after N failed attempts
+  login_window_seconds: 300              # Within this time window
+  lockout_duration_seconds: 900          # Lock duration (15 min)
+
+  # 2FA (optional but recommended for a security console)
+  # Generate: python3 -c "import secrets,base64; print(base64.b32encode(secrets.token_bytes(20)).decode())"
+  # Then add to your authenticator app (Google Authenticator, Authy, etc.)
+  totp_secret: ""                        # Base32-encoded TOTP secret (empty = 2FA disabled)
+
+# ── Retention ──
+retention:
+  alerts_days: 90
+  events_days: 30
+  flows_days: 14
+
+# ── Attacker reconnaissance (optional API keys) ──
+recon:
+  abuseipdb_key: ""                    # gratuit : abuseipdb.com/account/api
+  virustotal_key: ""                   # gratuit : virustotal.com/gui/my-apikey
+
+# ══════════════════════════════════════════════════
+# NETGATE FIREWALL (OPTIONAL — pfSense / OPNsense)
+# ══════════════════════════════════════════════════
+# If enabled, Sentinel pushes blocks directly
+# to your Netgate firewall in addition to local blocking.
+#
+# Firewall prerequisites :
+#   1. Create an alias named "CyberGuard_Block" (type Host)
+#   2. Create a WAN rule : Block source = CyberGuard_Block
+#   3. Enable the API and generate a key
+#
+# pfSense : install pfSense-pkg-API, create key in System > API
+# OPNsense : System > Access > Users > API keys
+netgate:
+  enabled: true
+  type: ""                             # "pfsense" ou "opnsense"
+  host: ""                             # IP du firewall
+  port: 443
+  verify_ssl: false
+  block_alias: "CyberGuard_Block"
+  timeout: 15
+  pfsense_api_client: ""
+  pfsense_api_key: ""
+  opnsense_key: ""
+  opnsense_secret: ""
+
+# ── Multi-factor identity (anti-spoofing MAC) ──
+# Each machine is identified by a fingerprint combining :
+# MAC, hostname, OS (TTL/TCP), open ports, banners, traffic patterns
+identity:
+  spoof_threshold: 50                  # Score < 50 = spoofing probable
+  learning_hours: 48                   # Initial learning period
+
+# ══════════════════════════════════════════════════
+# CLIENT AGENT (optional — zero-privilege)
+# ══════════════════════════════════════════════════
+# Without the agent: the system works fully via email notifications.
+# No AV scan, no forensic collection from workstations.
+#
+# With the agent: a lightweight script runs on each workstation and
+# polls Sentinel for notifications. It displays popups, runs local
+# AV scans, and collects forensic evidence — all locally, with
+# user consent. Sentinel NEVER connects to clients.
+#
+# Deploy: python3 cyberguard-agent.py --server https://SENTINEL_IP:8443
+# (no admin privileges required on the workstation)
+client_agent:
+  enabled: true
+  message_ttl_minutes: 120             # How long notifications stay in queue
+  collect_after_incident: true         # Queue forensic collection request after incident
+  ack_timeout_seconds: 120             # Popup ack timeout — email sent if no response
+  shared_secret: ""                    # HMAC-SHA256 secret — must match --secret on agents
+                                       # Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# ══════════════════════════════════════════════════
+# SIEM EXPORT (optional — Syslog/CEF)
+# ══════════════════════════════════════════════════
+# Exports alerts to an external SIEM (Splunk, ELK, Graylog, QRadar...)
+# Format: Common Event Format (CEF) over Syslog
+siem:
+  enabled: false
+  host: ""                             # SIEM collector IP
+  port: 514
+  protocol: "udp"                      # "udp" or "tcp"
+
+# ══════════════════════════════════════════════════
+# THREAT INTELLIGENCE (optional — MISP / OpenCTI)
+# ══════════════════════════════════════════════════
+threat_intel:
+  misp_url: ""                         # Ex: "https://misp.local"
+  misp_key: ""                         # MISP API key
+  opencti_url: ""                      # Ex: "https://opencti.local"
+  opencti_token: ""                    # OpenCTI bearer token
+
+# ══════════════════════════════════════════════════
+# DETECTION RULES (hot-reloadable YAML)
+# ══════════════════════════════════════════════════
+# Rules are loaded from this file and reloaded automatically when modified.
+# See /opt/cyberguard/rules.example.yaml for format reference.
+rules:
+  path: "/etc/cyberguard/rules.yaml"
+
+# ══════════════════════════════════════════════════
+# PERIODIC REPORTS
+# ══════════════════════════════════════════════════
+reports:
+  weekly_enabled: true
+  weekly_day: "monday"
+  weekly_hour: 8
+
+# ══════════════════════════════════════════════════
+# BACKUP
+# ══════════════════════════════════════════════════
+# Daily automatic backup of database, config, snapshots, forensic reports.
+# Stored in /var/log/cyberguard/backups/ by default.
+backup:
+  directory: "/var/log/cyberguard/backups"
+
+# ══════════════════════════════════════════════════
+# RESILIENCE (self-protection under load)
+# ══════════════════════════════════════════════════
+# Sentinel monitors its own server health and enters degraded mode
+# when resources are critical: non-essential tasks are suspended to
+# preserve CPU/RAM/IO for packet capture and defense.
+resilience:
+  cpu_threshold: 85                    # % CPU before warning
+  ram_threshold: 90                    # % RAM before warning
+  disk_threshold: 90                   # % disk before warning
+  iowait_threshold: 50                # % I/O wait before warning

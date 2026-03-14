@@ -1,0 +1,16 @@
+Package: cyberguard-sentinel
+Version: 2.2.3-1
+Section: net
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.12), python3-venv, python3-dev, libpcap-dev, iptables, tcpdump
+Recommends: nmap, whois, traceroute, nftables, net-tools, openssl
+Suggests: suricata, rsyslog
+Maintainer: CyberGuard <cyberguard@localhost>
+Installed-Size: 720
+Description: Serveur autonome de defense reseau active
+ CyberGuard Sentinel surveille le reseau, recoit les alertes Suricata
+ et riposte apres confirmation admin. Recon attaquant, forensique.
+ .
+ Compatible : Ubuntu 24+, Debian 13+, et tout systeme Debian-based
+ (Mint, Kali, Proxmox, Raspberry Pi OS, etc.) en mode compatibilite.

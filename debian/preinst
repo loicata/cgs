@@ -1,0 +1,59 @@
+#!/bin/bash
+set -e
+G='\033[0;32m';C='\033[0;36m';R='\033[0;31m';Y='\033[0;33m';B='\033[1m';N='\033[0m'
+echo -e "${C}${B}⛨  CyberGuard Sentinel — System check${N}"
+
+DISTRO="unknown";DISTRO_VERSION="0";DISTRO_MAJOR=0;DEBIAN_BASED=false;INSTALL_MODE="compat"
+
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO_VERSION="${VERSION_ID:-0}"
+    DISTRO_MAJOR=$(echo "$DISTRO_VERSION" | cut -d. -f1)
+    case "$ID" in
+        ubuntu)  DISTRO="ubuntu";  DEBIAN_BASED=true; [ "$DISTRO_MAJOR" -ge 24 ] 2>/dev/null && INSTALL_MODE="ubuntu" ;;
+        debian)  DISTRO="debian";  DEBIAN_BASED=true; [ "$DISTRO_MAJOR" -ge 13 ] 2>/dev/null && INSTALL_MODE="debian" ;;
+        *)  if [ -f /etc/debian_version ] || echo "${ID_LIKE:-}" | grep -qi "debian\|ubuntu"; then
+                DISTRO="$ID"; DEBIAN_BASED=true
+            fi ;;
+    esac
+fi
+[ "$DEBIAN_BASED" = false ] && [ -f /etc/debian_version ] && DEBIAN_BASED=true && DISTRO="debian-based"
+
+if [ "$DEBIAN_BASED" = false ]; then
+    echo -e "${R}${B}ERROR: Not a Debian-based system.${N}"
+    echo -e "${R}Required: Ubuntu 24+, Debian 13+, or any Debian derivative.${N}"
+    echo -e "${R}Detected: ${ID:-unknown} ${VERSION_ID:-}${N}"
+    exit 1
+fi
+
+# Python
+PYTHON_CMD=""
+for cmd in python3.13 python3.12 python3.11 python3.10 python3; do
+    command -v "$cmd" &>/dev/null && PYTHON_CMD="$cmd" && break
+done
+[ -z "$PYTHON_CMD" ] && echo -e "${R}ERROR: Python 3 not found.${N}" && exit 1
+
+PY_VER=$("$PYTHON_CMD" -c "import sys;print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PY_MAJ=$("$PYTHON_CMD" -c "import sys;print(sys.version_info.major)")
+PY_MIN=$("$PYTHON_CMD" -c "import sys;print(sys.version_info.minor)")
+if [ "$PY_MAJ" -lt 3 ] || { [ "$PY_MAJ" -eq 3 ] && [ "$PY_MIN" -lt 9 ]; }; then
+    echo -e "${R}ERROR: Python >= 3.9 required (detected: $PY_VER)${N}"; exit 1
+fi
+
+case "$INSTALL_MODE" in
+    ubuntu) echo -e "  ${G}✓${N} ${B}Ubuntu $DISTRO_VERSION${N} ${G}(optimized mode)${N}" ;;
+    debian) echo -e "  ${G}✓${N} ${B}Debian $DISTRO_VERSION${N} ${G}(optimized mode)${N}" ;;
+    compat) echo -e "  ${Y}✓${N} ${B}${PRETTY_NAME:-$DISTRO $DISTRO_VERSION}${N} ${Y}(compatibility mode)${N}" ;;
+esac
+echo -e "  ${G}✓${N} Python ${B}$PY_VER${N} ($PYTHON_CMD)"
+
+mkdir -p /opt/cyberguard
+cat > /opt/cyberguard/.install_mode << MEOF
+INSTALL_MODE="$INSTALL_MODE"
+DISTRO="$DISTRO"
+DISTRO_VERSION="$DISTRO_VERSION"
+DISTRO_MAJOR="$DISTRO_MAJOR"
+PYTHON_CMD="$PYTHON_CMD"
+PY_VERSION="$PY_VER"
+PRETTY_NAME="${PRETTY_NAME:-$DISTRO $DISTRO_VERSION}"
+MEOF
