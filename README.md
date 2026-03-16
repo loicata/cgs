@@ -207,7 +207,7 @@ cgs/
 
 ## License
 
-All rights reserved.
+MIT License — see [LICENSE](LICENSE).
 
 ## Author
 
