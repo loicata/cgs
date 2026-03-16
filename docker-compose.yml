@@ -1,21 +1,32 @@
-version: "3.8"
-
 services:
   cgs:
     build: .
     container_name: cgs
     restart: unless-stopped
-    network_mode: host        # Required for network monitoring
+    network_mode: host              # Required for network monitoring (ARP, sniffing)
     cap_add:
-      - NET_RAW               # Packet capture
-      - NET_ADMIN              # Firewall rules
+      - NET_RAW                     # Packet capture (scapy)
+      - NET_ADMIN                   # Firewall rules (iptables/nftables)
+    cap_drop:
+      - ALL                         # Drop all other capabilities
+    security_opt:
+      - no-new-privileges:true      # Prevent privilege escalation
+    read_only: true                 # Read-only root filesystem
+    tmpfs:
+      - /tmp:size=100M              # Writable temp only in tmpfs
     volumes:
-      - cgs-data:/var/lib/cgs/data
-      - cgs-logs:/var/log/cgs
-      - cgs-config:/etc/cgs
+      - cgs-data:/var/lib/cgs/data  # Database, fingerprints
+      - cgs-logs:/var/log/cgs       # Logs, snapshots, forensics, backups
+      - cgs-config:/etc/cgs         # Config + TLS certificates
       - cgs-evidence:/opt/cgs/data/evidence
     environment:
       - CGS_LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,ssl; ctx=ssl._create_unverified_context(); urllib.request.urlopen('https://localhost:8443/api/setup/detect-network',context=ctx,timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
 
 volumes:
   cgs-data:
