@@ -29,12 +29,25 @@ CGS (Cyber Guardian Sentinel) is a fully autonomous micro-SIEM written in Python
 - Complaint PDF generation (country-adapted: IE, FR, US)
 - Deep attacker reconnaissance (WHOIS, geolocation, port scan, OS fingerprint)
 
+**Governance, Risk & Compliance (GRC)**
+- Risk register with likelihood/impact scoring and treatment plans
+- Asset inventory linked to network hosts (criticality, classification, dependencies)
+- Policy management with versioning, approval workflow, and user acknowledgment
+- Audit management with findings, remediation plans, and due dates
+- Vendor risk assessment with questionnaires
+- Risk-to-control mapping (which controls mitigate which risks)
+- Compliance evidence upload and management
+- Automated compliance scoring (20 automated checks + declarative controls)
+- Framework mapping: ISO 27001, NIST CSF, CIS Controls
+- Daily compliance snapshots for trend tracking
+- Compliance PDF and DOCX report generation
+- Country-adapted complaint PDF generation (IE, FR, US)
+
 **Dashboard & API**
 - Real-time web dashboard (Flask + SocketIO) with HTTPS
-- REST API for all operations
-- GRC module (risks, assets, policies, audits, vendors)
-- Compliance scoring with framework mapping (ISO 27001, NIST, CIS)
-- Global search across all entities
+- Full REST API for all operations (detection, defense, GRC, compliance)
+- Global search across alerts, hosts, risks, assets, policies, vendors
+- WebSocket live alerts feed
 
 **Security Hardening**
 - AES-128-CBC secrets encryption (Fernet vault)
