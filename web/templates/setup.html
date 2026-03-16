@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CGS — Initial Setup</title>
+<style>
+:root{--bg:#080c14;--s1:#0c1220;--s2:#111828;--brd:#1a2438;--t1:#e0e8f0;--t2:#6a7a8a;
+--grn:#00ff88;--red:#ff3355;--org:#ff8833;--ylw:#ffcc00;--blu:#3399ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Consolas,monospace;background:var(--bg);color:var(--t1);font-size:13px;
+min-height:100vh;display:flex;align-items:center;justify-content:center;
+background-image:radial-gradient(ellipse at 50% 0%,#0a1628,#080c14 70%)}
+.wizard{width:720px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:32px;
+border:1px solid rgba(0,255,136,.12);border-radius:4px;background:rgba(8,12,20,.95);
+box-shadow:0 0 60px rgba(0,255,136,.03)}
+h1{color:var(--grn);font-size:1.1em;letter-spacing:4px;text-align:center;margin-bottom:4px;text-transform:uppercase}
+.sub{color:var(--t2);font-size:.7em;text-align:center;margin-bottom:24px;letter-spacing:2px}
+.step{display:none}.step.active{display:block}
+.step-title{color:var(--grn);font-size:.85em;letter-spacing:2px;margin-bottom:16px;
+padding-bottom:8px;border-bottom:1px solid var(--brd)}
+.step-num{color:var(--t2);font-size:.7em}
+label{display:block;color:#3a7a5a;font-size:.7em;letter-spacing:1.5px;margin-bottom:3px;
+margin-top:12px;text-transform:uppercase}
+input,select,textarea{width:100%;padding:8px 10px;background:#0a1020;border:1px solid #1a3a2a;
+color:var(--grn);font-family:inherit;font-size:.85em;border-radius:2px;outline:none;transition:.2s}
+input:focus,select:focus,textarea:focus{border-color:var(--grn);box-shadow:0 0 8px rgba(0,255,136,.1)}
+textarea{min-height:60px;resize:vertical}
+select{cursor:pointer}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{color:var(--t2);font-size:.7em;margin-top:2px}
+.btn-row{display:flex;gap:10px;margin-top:24px;justify-content:flex-end}
+button{padding:10px 24px;background:transparent;border:1px solid var(--grn);color:var(--grn);
+font-family:inherit;font-size:.78em;letter-spacing:2px;text-transform:uppercase;cursor:pointer;
+transition:.2s;border-radius:2px}
+button:hover{background:var(--grn);color:var(--bg)}
+button.secondary{border-color:var(--brd);color:var(--t2)}
+button.secondary:hover{border-color:var(--t2);color:var(--t1);background:transparent}
+button:disabled{opacity:.4;cursor:not-allowed}
+.err{color:var(--red);font-size:.75em;margin-top:8px;padding:6px 10px;
+border:1px solid rgba(255,68,68,.2);border-radius:2px;background:rgba(255,68,68,.05)}
+.ok{color:var(--grn);font-size:.75em;margin-top:8px;padding:6px 10px;
+border:1px solid rgba(0,255,136,.2);border-radius:2px;background:rgba(0,255,136,.05)}
+.progress{display:flex;gap:4px;margin-bottom:20px;justify-content:center}
+.progress .dot{width:8px;height:8px;border-radius:50%;background:var(--brd);transition:.2s}
+.progress .dot.done{background:var(--grn)}.progress .dot.cur{background:var(--grn);box-shadow:0 0 6px var(--grn)}
+.toggle{display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-size:.8em}
+.toggle input[type=checkbox]{width:auto;cursor:pointer}
+.detected{color:var(--blu);font-size:.75em;margin-top:4px}
+.scan-results{max-height:200px;overflow-y:auto;margin-top:8px;font-size:.8em}
+.scan-host{padding:6px 8px;border-bottom:1px solid var(--brd)}
+.loading{color:var(--ylw);font-size:.8em;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wizard">
+<h1>&#x26E8; CGS Server</h1>
+<div class="sub">initial configuration wizard</div>
+<div class="progress" id="progress"></div>
+<div id="msg"></div>
+
+<!-- Step 0: Admin account -->
+<div class="step active" data-step="0">
+<div class="step-title"><span class="step-num">1/10</span> Administrator Account</div>
+<p style="color:var(--t2);font-size:.8em;margin-bottom:12px">Create the first admin account to manage CGS.</p>
+<label>Company name (optional — appears in compliance reports)</label>
+<input id="s0-company" placeholder="Acme Corp">
+<label>Username</label>
+<input id="s0-user" placeholder="admin" autocomplete="username">
+<label>Password</label>
+<input id="s0-pass" type="password" autocomplete="new-password">
+<label>Confirm password</label>
+<input id="s0-pass2" type="password" autocomplete="new-password">
+</div>
+
+<!-- Step 1: Network -->
+<div class="step" data-step="1">
+<div class="step-title"><span class="step-num">2/10</span> Network to Monitor</div>
+<label>Subnets (CIDR, one per line)</label>
+<textarea id="s1-subnets" rows="2">192.168.1.0/24</textarea>
+<div class="detected" id="s1-detected"></div>
+<div class="row2">
+<div><label>Capture interface</label><input id="s1-iface" value="auto">
+<div class="detected" id="s1-ifaces"></div></div>
+<div><label>Exclude IPs (comma-separated)</label><input id="s1-excludes" value=""></div>
+</div>
+<div class="toggle"><input type="checkbox" id="s1-nmap" checked><span>Use Nmap for advanced scans</span></div>
+</div>
+
+<!-- Step 2: Suricata -->
+<div class="step" data-step="2">
+<div class="step-title"><span class="step-num">3/10</span> Suricata Ingestion (optional)</div>
+<p style="color:var(--t2);font-size:.8em;margin-bottom:12px">Without Suricata, Sentinel uses its own analysis engine (scapy).</p>
+<label>Reception mode</label>
+<select id="s2-mode">
+<option value="none" selected>No Suricata (local analysis only)</option>
+<option value="syslog">Syslog UDP</option>
+<option value="eve">eve.json file</option>
+<option value="tcp">TCP stream</option>
+</select>
+<div id="s2-opts"></div>
+</div>
+
+<!-- Step 3: Admin Email -->
+<div class="step" data-step="3">
+<div class="step-title"><span class="step-num">4/10</span> Admin Email Notification</div>
+<p style="color:var(--t2);font-size:.8em;margin-bottom:12px">SMTP configuration and admin alerts for incident notifications.</p>
+<div class="toggle"><input type="checkbox" id="s3-enabled"><span>Enable email notifications</span></div>
+<div id="s3-fields" style="display:none">
+<div class="row2">
+<div><label>SMTP server</label><input id="s3-smtp"></div>
+<div><label>SMTP port</label><input id="s3-port" value="587" type="number"></div>
+</div>
+<div class="toggle"><input type="checkbox" id="s3-tls" checked><span>Use TLS/STARTTLS</span></div>
+<div class="row2">
+<div><label>SMTP user</label><input id="s3-user"></div>
+<div><label>SMTP password</label><input id="s3-pass" type="password"></div>
+</div>
+<label>From address</label><input id="s3-from" placeholder="sentinel@company.com">
+<label>Sentinel URL (for email links)</label><input id="s3-url">
+<label>Admin emails (one per line)</label><textarea id="s3-admins" rows="2"></textarea>
+<label>Security contact (shown in emails)</label><input id="s3-contact" value="the IT security team">
+<div class="row2">
+<div><label>Approval timeout (minutes)</label><input id="s3-timeout" value="15" type="number"></div>
+<div><label>Max shutdown wait (minutes)</label><input id="s3-maxwait" value="30" type="number"></div>
+</div>
+<div style="margin-top:12px"><button class="secondary" type="button" onclick="testSmtp()">Test SMTP</button>
+<span id="s3-test-result"></span></div>
+</div>
+</div>
+
+<!-- Step 4: Client agent -->
+<div class="step" data-step="4">
+<div class="step-title"><span class="step-num">5/10</span> Client Agent (zero-privilege)</div>
+<p style="color:var(--t2);font-size:.8em;margin-bottom:8px">Optional lightweight script on workstations for popups and forensic collection.</p>
+<div class="toggle"><input type="checkbox" id="s4-enabled" checked><span>Enable client agent support</span></div>
+<div id="s4-fields">
+<label>Shared secret (auto-generated)</label>
+<input id="s4-secret" readonly>
+<button class="secondary" type="button" onclick="s4Regen()" style="margin-top:6px;padding:4px 12px">Regenerate</button>
+<div class="toggle"><input type="checkbox" id="s4-forensic" checked><span>Request forensic collection after incident</span></div>
+<div class="row2">
+<div><label>Ack timeout before email fallback (s)</label><input id="s4-acktimeout" value="120" type="number"></div>
+<div><label>Notification queue TTL (min)</label><input id="s4-ttl" value="120" type="number"></div>
+</div>
+</div>
+</div>
+
+<!-- Step 5: Defense -->
+<div class="step" data-step="5">
+<div class="step-title"><span class="step-num">6/10</span> Active Defense</div>
+<div class="toggle"><input type="checkbox" id="s5-enabled" checked><span>Enable active defense</span></div>
+<div id="s5-fields">
+<label>Operating mode</label>
+<select id="s5-mode">
+<option value="confirmation">Confirmation (admin approves first)</option>
+<option value="immediate">Immediate (act first, inform after)</option>
+</select>
+<div class="toggle"><input type="checkbox" id="s5-autoblock" checked><span>Automatic blocking of critical IPs</span></div>
+<div class="row2">
+<div><label>Block duration (seconds)</label><input id="s5-ttl" value="3600" type="number"></div>
+<div><label>Alert count threshold</label><input id="s5-threshold" value="5" type="number"></div>
+</div>
+<label>Whitelist IPs (comma-separated)</label>
+<input id="s5-whitelist" placeholder="192.168.1.1, 8.8.8.8">
+</div>
+</div>
+
+<!-- Step 6: Recon -->
+<div class="step" data-step="6">
+<div class="step-title"><span class="step-num">7/10</span> Attacker Reconnaissance (optional)</div>
+<p style="color:var(--t2);font-size:.8em;margin-bottom:12px">These API keys enhance attacker intel but are not required.</p>
+<label>AbuseIPDB API key</label><input id="s6-abuseipdb" placeholder="Free: abuseipdb.com">
+<label>VirusTotal API key</label><input id="s6-virustotal" placeholder="Free: virustotal.com">
+<label>Shodan API key</label><input id="s6-shodan" placeholder="Free tier: shodan.io">
+<label>GreyNoise API key</label><input id="s6-greynoise" placeholder="Free community: greynoise.io (optional, works without key)">
+<label>OTX AlienVault API key</label><input id="s6-otx" placeholder="Free: otx.alienvault.com">
+</div>
+
+<!-- Step 7: Netgate -->
+<div class="step" data-step="7">
+<div class="step-title"><span class="step-num">8/10</span> Netgate Firewall (optional)</div>
+<div class="toggle"><input type="checkbox" id="s7-enabled"><span>Connect a Netgate firewall</span></div>
+<div id="s7-fields" style="display:none">
+<label>Firmware</label>
+<select id="s7-type"><option value="pfsense">pfSense</option><option value="opnsense">OPNsense</option></select>
+<div class="row2">
+<div><label>Firewall IP</label><input id="s7-host"></div>
+<div><label>Port</label><input id="s7-port" value="443" type="number"></div>
+</div>
+<label>Block alias name</label><input id="s7-alias" value="CGS_Block">
+<div id="s7-pfsense-fields">
+<label>pfSense API Client ID</label><input id="s7-pf-client">
+<label>pfSense API Key</label><input id="s7-pf-key">
+</div>
+<div id="s7-opnsense-fields" style="display:none">
+<label>OPNsense API Key</label><input id="s7-opn-key">
+<label>OPNsense API Secret</label><input id="s7-opn-secret">
+</div>
+</div>
+</div>
+
+<!-- Step 8: User directory -->
+<div class="step" data-step="8">
+<div class="step-title"><span class="step-num">9/10</span> User Accounts</div>
+<p style="color:var(--t2);font-size:.8em;margin-bottom:12px">Create user accounts for each workstation. Users will set their own password on first login.</p>
+<button class="secondary" type="button" onclick="scanNetwork()">Scan Network (ARP)</button>
+<span id="s8-scan-status" class="loading"></span>
+<div id="s8-hosts" class="scan-results"></div>
+<div style="margin-top:12px"><button class="secondary" type="button" onclick="s8AddManual()">+ Add manually</button></div>
+<div id="s8-directory"></div>
+<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--brd)">
+<label>Welcome email delay after setup (minutes)</label>
+<input id="s8-invite-delay" value="60" type="number" min="0" max="1440" style="width:120px">
+<div class="hint">Wait before sending welcome emails with username and login link (0 = immediate, requires SMTP configured)</div>
+</div>
+</div>
+
+<!-- Step 9: Retention -->
+<div class="step" data-step="9">
+<div class="step-title"><span class="step-num">10/10</span> Reports &amp; Retention</div>
+<label>Country for legal information</label>
+<select id="s3-country"><option value="IE">Ireland</option><option value="FR">France</option><option value="US">United States</option></select>
+<div class="toggle"><input type="checkbox" id="s3-legal" checked><span>Include complaint filing contacts in reports</span></div>
+<div class="toggle"><input type="checkbox" id="s3-forensic" checked><span>Attach forensic JSON file to reports</span></div>
+<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--brd)">
+<div class="row2">
+<div><label>Alert retention (days)</label><input id="s9-alerts" value="90" type="number"></div>
+<div><label>Event retention (days)</label><input id="s9-events" value="30" type="number"></div>
+</div>
+<label>Network flow retention (days)</label><input id="s9-flows" value="14" type="number" style="width:50%">
+</div>
+</div>
+
+<div class="btn-row">
+<button class="secondary" id="btn-prev" onclick="prevStep()" style="display:none">Back</button>
+<button id="btn-next" onclick="nextStep()">Next</button>
+</div>
+</div>
+
+<script>
+const STEPS=10;
+let cur=0, netInfo={}, userDir=[];
+
+// ── Persist form data + current step across refresh ──
+function saveState(){
+const data={step:cur};
+document.querySelectorAll('input,select,textarea').forEach(el=>{
+if(el.id)data[el.id]=el.type==='checkbox'?el.checked:el.value;});
+localStorage.setItem('cgs_setup',JSON.stringify(data));
+}
+function restoreState(){
+try{
+const raw=localStorage.getItem('cgs_setup');if(!raw)return;
+const data=JSON.parse(raw);
+document.querySelectorAll('input,select,textarea').forEach(el=>{
+if(el.id && data[el.id]!==undefined){
+if(el.type==='checkbox')el.checked=data[el.id];else el.value=data[el.id];}});
+if(data.step>0)showStep(data.step);
+}catch(e){}
+}
+
+// Init progress dots
+(function(){const p=document.getElementById('progress');
+for(let i=0;i<STEPS;i++){const d=document.createElement('span');d.className='dot'+(i===0?' cur':'');p.appendChild(d);}})();
+
+function showStep(n){
+document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+document.querySelector(`[data-step="${n}"]`).classList.add('active');
+document.querySelectorAll('.progress .dot').forEach((d,i)=>{
+d.className='dot'+(i<n?' done':'')+(i===n?' cur':'');});
+document.getElementById('btn-prev').style.display=n>0?'':'none';
+document.getElementById('btn-next').textContent=n===STEPS-1?'Complete Setup':'Next';
+document.getElementById('msg').innerHTML='';
+cur=n;
+saveState();
+if(n===8)scanNetwork();
+}
+
+function msg(txt,ok){document.getElementById('msg').innerHTML=ok?`<div class="ok">${txt}</div>`:`<div class="err">${txt}</div>`;}
+
+function nextStep(){
+if(!validateStep(cur))return;
+if(cur===STEPS-1){completeSetup();return;}
+showStep(cur+1);
+}
+function prevStep(){if(cur>0)showStep(cur-1);}
+
+function validateStep(n){
+if(n===0){
+const u=document.getElementById('s0-user').value.trim();
+const p=document.getElementById('s0-pass').value;
+const p2=document.getElementById('s0-pass2').value;
+if(u.length<2){msg('Username must be at least 2 characters');return false;}
+if(p.length<16){msg('Password must be at least 16 characters');return false;}
+if(p!==p2){msg('Passwords do not match');return false;}
+}
+return true;
+}
+
+// Detect network on load
+fetch('/api/setup/detect-network').then(r=>r.json()).then(d=>{
+netInfo=d;
+if(d.subnet){document.getElementById('s1-subnets').value=d.subnet;}
+if(d.server_ip){document.getElementById('s1-excludes').value=d.server_ip;
+document.getElementById('s1-detected').textContent='Detected: '+d.subnet;}
+if(d.interfaces&&d.interfaces.length){
+document.getElementById('s1-ifaces').textContent='Available: '+d.interfaces.join(', ');}
+if(d.server_ip){document.getElementById('s3-url').value='https://'+d.server_ip+':8443';}
+}).catch(()=>{});
+
+// Generate agent secret
+function rndHex(n){const a=new Uint8Array(n);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');}
+document.getElementById('s4-secret').value=rndHex(32);
+function s4Regen(){document.getElementById('s4-secret').value=rndHex(32);}
+
+// Suricata mode toggle
+document.getElementById('s2-mode').onchange=function(){
+const v=this.value,c=document.getElementById('s2-opts');
+if(v==='syslog')c.innerHTML='<label>Syslog UDP port</label><input id="s2-syslog" value="5514">';
+else if(v==='eve')c.innerHTML='<label>eve.json path</label><input id="s2-eve" value="/mnt/firewall/eve.json">';
+else if(v==='tcp')c.innerHTML='<label>TCP port</label><input id="s2-tcp" value="5515">';
+else c.innerHTML='';
+};
+
+// Email toggle
+document.getElementById('s3-enabled').onchange=function(){
+document.getElementById('s3-fields').style.display=this.checked?'':'none';};
+
+// Netgate toggle
+document.getElementById('s7-enabled').onchange=function(){
+document.getElementById('s7-fields').style.display=this.checked?'':'none';};
+document.getElementById('s7-type').onchange=function(){
+document.getElementById('s7-pfsense-fields').style.display=this.value==='pfsense'?'':'none';
+document.getElementById('s7-opnsense-fields').style.display=this.value==='opnsense'?'':'none';
+};
+
+// SMTP test
+function testSmtp(){
+const r=document.getElementById('s3-test-result');
+r.textContent='Testing...';r.style.color='var(--ylw)';
+const admins=document.getElementById('s3-admins').value.trim().split('\n').filter(Boolean);
+fetch('/api/setup/test-smtp',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({smtp_server:document.getElementById('s3-smtp').value,
+smtp_port:parseInt(document.getElementById('s3-port').value),
+smtp_tls:document.getElementById('s3-tls').checked,
+smtp_user:document.getElementById('s3-user').value,
+smtp_password:document.getElementById('s3-pass').value,
+from_address:document.getElementById('s3-from').value,
+to:admins[0]||''})}).then(x=>x.json()).then(d=>{
+r.textContent=d.ok?'OK':'Error: '+d.error;
+r.style.color=d.ok?'var(--grn)':'var(--red)';}).catch(e=>{r.textContent='Error';r.style.color='var(--red)';});
+}
+
+// Network scan
+function scanNetwork(){
+const st=document.getElementById('s8-scan-status');
+st.textContent='Scanning...';
+const subnets=document.getElementById('s1-subnets').value.trim().split('\n').filter(Boolean);
+const excludes=document.getElementById('s1-excludes').value.split(',').map(s=>s.trim()).filter(Boolean);
+fetch('/api/setup/scan-network',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({subnets:subnets,iface:document.getElementById('s1-iface').value,
+excludes:excludes,server_ip:netInfo.server_ip||''})}).then(r=>r.json()).then(d=>{
+st.textContent=d.hosts.length+' host(s) found';
+const c=document.getElementById('s8-hosts');
+c.innerHTML=d.hosts.map((h,i)=>{
+const role=h.role||'';
+const label=role==='cgs_server'?' <span style="color:var(--grn);font-weight:700">&#x26E8; CGS Server</span>'
+  :role==='gateway'?' <span style="color:var(--grn);font-weight:700">Gateway</span>':'';
+if(role)return`<div class="scan-host" style="opacity:.8">
+<strong>${esc(h.ip)}</strong> ${esc(h.mac||'')}${label} <span style="color:var(--t2)">${esc(h.vendor||'')} ${esc(h.hostname||'')}</span>
+</div>`;
+return`<div class="scan-host" data-mac="${esc(h.mac||'')}" data-hostname="${esc(h.hostname||'')}">
+<strong>${esc(h.ip)}</strong> ${esc(h.mac||'')} <span style="color:var(--t2)">${esc(h.vendor||'')} ${esc(h.hostname||'')}</span>
+<div class="row2" style="margin-top:4px">
+<input placeholder="Username (login)" data-sh="${i}" class="sh-name" value="">
+<input placeholder="Email" data-sh="${i}" class="sh-email" value="">
+</div></div>`;}).join('');
+}).catch(e=>{st.textContent='Error: '+e;});
+}
+
+function s8AddManual(){
+const c=document.getElementById('s8-directory');
+const idx=c.children.length;
+const d=document.createElement('div');d.className='scan-host';
+d.innerHTML=`<div class="row2"><input placeholder="IP" class="dir-ip"><input placeholder="MAC" class="dir-mac"></div>
+<div class="row2" style="margin-top:4px"><input placeholder="Name" class="dir-name"><input placeholder="Email" class="dir-email"></div>`;
+c.appendChild(d);
+}
+
+function collectDirectory(){
+const dir=[];
+// From scan
+document.querySelectorAll('.sh-name').forEach(el=>{
+const i=el.dataset.sh;const name=el.value.trim();
+if(!name)return;
+const email=document.querySelector(`.sh-email[data-sh="${i}"]`).value.trim();
+const hostDiv=el.closest('.scan-host');
+const ip=hostDiv.querySelector('strong').textContent;
+const mac=hostDiv.dataset.mac||'';
+const hostname=hostDiv.dataset.hostname||'';
+dir.push({ip:ip,name:name,email:email,mac:mac,hostname:hostname});
+});
+// Manual
+document.querySelectorAll('#s8-directory .scan-host').forEach(el=>{
+const ip=el.querySelector('.dir-ip').value.trim();
+const name=el.querySelector('.dir-name').value.trim();
+if(!name||!ip)return;
+dir.push({ip:ip,mac:el.querySelector('.dir-mac').value.trim(),
+name:name,email:el.querySelector('.dir-email').value.trim(),hostname:''});
+});
+return dir;
+}
+
+function esc(s){if(!s)return'';const d=document.createElement('span');d.textContent=String(s);return d.innerHTML;}
+
+function completeSetup(){
+document.getElementById('btn-next').disabled=true;
+document.getElementById('btn-next').textContent='Saving...';
+
+const subnets=document.getElementById('s1-subnets').value.trim().split('\n').filter(Boolean);
+const excludes=document.getElementById('s1-excludes').value.split(',').map(s=>s.trim()).filter(Boolean);
+const s2mode=document.getElementById('s2-mode').value;
+const emailEnabled=document.getElementById('s3-enabled').checked;
+
+const config={
+general:{data_dir:"/var/lib/cgs/data",log_dir:"/var/log/cgs",log_level:"INFO"},
+network:{subnets:subnets,interface:document.getElementById('s1-iface').value,exclude_ips:excludes},
+discovery:{use_nmap:document.getElementById('s1-nmap').checked},
+suricata:{
+eve_file:s2mode==='eve'?(document.getElementById('s2-eve')||{}).value||'':'',
+syslog_port:s2mode==='syslog'?parseInt((document.getElementById('s2-syslog')||{}).value||'5514'):'',
+tcp_port:s2mode==='tcp'?parseInt((document.getElementById('s2-tcp')||{}).value||'5515'):'',
+},
+email:{
+enabled:emailEnabled,
+smtp_server:emailEnabled?document.getElementById('s3-smtp').value:'',
+smtp_port:emailEnabled?parseInt(document.getElementById('s3-port').value):587,
+smtp_tls:emailEnabled?document.getElementById('s3-tls').checked:true,
+smtp_user:emailEnabled?document.getElementById('s3-user').value:'',
+smtp_password:emailEnabled?document.getElementById('s3-pass').value:'',
+from_address:emailEnabled?document.getElementById('s3-from').value:'',
+sentinel_url:document.getElementById('s3-url').value||('https://'+(netInfo.server_ip||'localhost')+':8443'),
+admin_emails:emailEnabled?document.getElementById('s3-admins').value.trim().split('\n').filter(Boolean):[],
+security_contact:document.getElementById('s3-contact').value,
+approval_timeout_minutes:parseInt(document.getElementById('s3-timeout').value)||15,
+shutdown_max_wait_minutes:parseInt(document.getElementById('s3-maxwait').value)||30,
+country:document.getElementById('s3-country').value,
+include_legal_info:document.getElementById('s3-legal').checked,
+attach_forensic_file:document.getElementById('s3-forensic').checked,
+invite_delay_minutes:parseInt(document.getElementById('s8-invite-delay').value)||60,
+user_directory:collectDirectory(),
+},
+client_agent:{
+enabled:document.getElementById('s4-enabled').checked,
+shared_secret:document.getElementById('s4-secret').value,
+collect_after_incident:document.getElementById('s4-forensic').checked,
+ack_timeout_seconds:parseInt(document.getElementById('s4-acktimeout').value)||120,
+message_ttl_minutes:parseInt(document.getElementById('s4-ttl').value)||120,
+},
+defense:{
+enabled:document.getElementById('s5-enabled').checked,
+mode:document.getElementById('s5-mode').value,
+auto_block:document.getElementById('s5-autoblock').checked,
+block_ttl_seconds:parseInt(document.getElementById('s5-ttl').value)||3600,
+alert_count_threshold:parseInt(document.getElementById('s5-threshold').value)||5,
+whitelist_ips:document.getElementById('s5-whitelist').value.split(',').map(s=>s.trim()).filter(Boolean),
+},
+recon:{
+abuseipdb_key:document.getElementById('s6-abuseipdb').value,
+virustotal_key:document.getElementById('s6-virustotal').value,
+shodan_key:document.getElementById('s6-shodan').value,
+greynoise_key:document.getElementById('s6-greynoise').value,
+otx_key:document.getElementById('s6-otx').value,
+},
+netgate:{
+enabled:document.getElementById('s7-enabled').checked,
+type:document.getElementById('s7-type').value,
+host:(document.getElementById('s7-host')||{}).value||'',
+port:parseInt((document.getElementById('s7-port')||{}).value||'443'),
+block_alias:(document.getElementById('s7-alias')||{}).value||'CGS_Block',
+pfsense_api_client:(document.getElementById('s7-pf-client')||{}).value||'',
+pfsense_api_key:(document.getElementById('s7-pf-key')||{}).value||'',
+opnsense_key:(document.getElementById('s7-opn-key')||{}).value||'',
+opnsense_secret:(document.getElementById('s7-opn-secret')||{}).value||'',
+},
+retention:{
+alerts_days:parseInt(document.getElementById('s9-alerts').value)||90,
+events_days:parseInt(document.getElementById('s9-events').value)||30,
+flows_days:parseInt(document.getElementById('s9-flows').value)||14,
+},
+web:{enabled:true,host:"0.0.0.0",port:8443},
+};
+
+fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+admin_username:document.getElementById('s0-user').value.trim(),
+admin_password:document.getElementById('s0-pass').value,
+admin_company:document.getElementById('s0-company').value.trim(),
+config:config
+})}).then(r=>r.json()).then(d=>{
+if(d.ok){
+localStorage.removeItem('cgs_setup');
+document.querySelector('.wizard').innerHTML=`<h1>&#x26E8; Setup Complete</h1>
+<div class="sub">CGS is configured</div>
+<div class="ok" style="text-align:center;margin:20px 0">
+Configuration saved. You can now log in.<br><br>
+<strong>A service restart may be needed to apply all changes.</strong>
+</div>
+<div class="btn-row" style="justify-content:center"><a href="/login"><button>Go to Login</button></a></div>`;
+}else{
+msg(d.e||'Setup failed');
+document.getElementById('btn-next').disabled=false;
+document.getElementById('btn-next').textContent='Complete Setup';
+}}).catch(e=>{
+msg('Connection error: '+e);
+document.getElementById('btn-next').disabled=false;
+document.getElementById('btn-next').textContent='Complete Setup';
+});
+}
+
+// Restore state after network detection completes
+setTimeout(restoreState, 500);
+// Save on any input change
+document.querySelectorAll('input,select,textarea').forEach(el=>
+el.addEventListener('change',saveState));
+</script>
+</body>
+</html>

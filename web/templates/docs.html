@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CGS API Documentation</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0e17;color:#c8d6e5;font-family:'Segoe UI',system-ui,sans-serif;line-height:1.6}
+  .container{max-width:960px;margin:0 auto;padding:24px}
+  h1{color:#00e5ff;font-size:1.8rem;margin-bottom:4px}
+  .subtitle{color:#5a6a7a;font-size:.9rem;margin-bottom:24px}
+  .search{width:100%;padding:10px 14px;background:#121929;border:1px solid #1e2d42;border-radius:6px;color:#c8d6e5;font-size:.95rem;margin-bottom:24px;outline:none}
+  .search:focus{border-color:#00e5ff}
+  .group{margin-bottom:20px;border:1px solid #1e2d42;border-radius:8px;overflow:hidden}
+  .group-header{background:#121929;padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+  .group-header:hover{background:#1a2436}
+  .group-name{font-weight:600;color:#00e5ff;text-transform:uppercase;font-size:.85rem;letter-spacing:.5px}
+  .group-count{color:#5a6a7a;font-size:.8rem}
+  .group-arrow{color:#5a6a7a;transition:transform .2s}
+  .group.collapsed .group-arrow{transform:rotate(-90deg)}
+  .group.collapsed .group-body{display:none}
+  .group-body{border-top:1px solid #1e2d42}
+  .endpoint{padding:10px 16px;border-bottom:1px solid #141c2b;display:flex;align-items:flex-start;gap:10px}
+  .endpoint:last-child{border-bottom:none}
+  .endpoint:hover{background:#0f1520}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:700;min-width:52px;text-align:center;flex-shrink:0;margin-top:2px}
+  .badge-GET{background:#1a3a5c;color:#4db8ff}
+  .badge-POST{background:#1a3c2a;color:#4dff88}
+  .badge-PUT{background:#3c2e1a;color:#ffb84d}
+  .badge-DELETE{background:#3c1a1a;color:#ff4d4d}
+  .badge-PATCH{background:#2e1a3c;color:#b84dff}
+  .ep-path{font-family:'Fira Code',monospace;font-size:.85rem;color:#e2e8f0;word-break:break-all}
+  .ep-desc{font-size:.8rem;color:#5a6a7a;margin-top:2px}
+  .ep-info{flex:1}
+  .ep-auth{font-size:.7rem;color:#5a6a7a;flex-shrink:0;margin-top:3px}
+  .no-results{text-align:center;color:#5a6a7a;padding:40px}
+  .loading{text-align:center;color:#5a6a7a;padding:60px}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>CGS API Documentation</h1>
+  <div class="subtitle" id="version">Loading...</div>
+  <input class="search" type="text" id="search" placeholder="Filter endpoints..." autocomplete="off">
+  <div id="content"><div class="loading">Loading API documentation...</div></div>
+</div>
+<script>
+(function(){
+  let data=null;
+  fetch("/api/docs").then(r=>r.json()).then(d=>{data=d;render(d);
+    document.getElementById("version").textContent="v"+d.version+" \u2014 "+d.endpoints.length+" endpoints";
+  }).catch(()=>{document.getElementById("content").innerHTML='<div class="no-results">Failed to load API docs.</div>'});
+
+  document.getElementById("search").addEventListener("input",function(){
+    if(!data)return;
+    const q=this.value.toLowerCase();
+    const filtered={...data,endpoints:data.endpoints.filter(e=>
+      e.path.toLowerCase().includes(q)||e.description.toLowerCase().includes(q)||
+      e.methods.join(" ").toLowerCase().includes(q)||e.group.toLowerCase().includes(q)
+    )};
+    render(filtered);
+  });
+
+  function render(d){
+    const groups={};
+    d.endpoints.forEach(e=>{(groups[e.group]=groups[e.group]||[]).push(e)});
+    if(!d.endpoints.length){document.getElementById("content").innerHTML='<div class="no-results">No matching endpoints.</div>';return}
+    let html="";
+    Object.keys(groups).sort().forEach(g=>{
+      const eps=groups[g];
+      html+='<div class="group"><div class="group-header" onclick="this.parentElement.classList.toggle(\'collapsed\')">';
+      html+='<span class="group-name">'+esc(g)+'</span>';
+      html+='<span><span class="group-count">'+eps.length+'</span> <span class="group-arrow">&#9660;</span></span></div>';
+      html+='<div class="group-body">';
+      eps.forEach(e=>{
+        e.methods.forEach(m=>{
+          html+='<div class="endpoint">';
+          html+='<span class="badge badge-'+m+'">'+m+'</span>';
+          html+='<div class="ep-info"><div class="ep-path">'+esc(e.path)+'</div>';
+          if(e.description)html+='<div class="ep-desc">'+esc(e.description)+'</div>';
+          html+='</div>';
+          html+='<span class="ep-auth">'+esc(e.auth)+'</span>';
+          html+='</div>';
+        });
+      });
+      html+='</div></div>';
+    });
+    document.getElementById("content").innerHTML=html;
+  }
+
+  function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+[bandit]
+# Skip rules that are false positives for this project:
+#   B101: assert used in pytest tests (correct pattern)
+#   B105: empty string defaults in config dicts (not real passwords)
+#   B106: empty string defaults for password_hash fields (set via setup wizard)
+#   B107: empty string defaults for function keyword args (not real passwords)
+#   B311: random used in test data generation (not for crypto)
+#   B404: import subprocess (required for system security tool)
+#   B603: subprocess without shell=True (this IS the safe pattern)
+#   B607: partial executable path (standard system tools: iptables, nft, nmap...)
+skips: B101,B105,B106,B107,B311,B404,B603,B607

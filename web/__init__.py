@@ -1,0 +1,1 @@
+"""CGS — Web interface."""

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CGS — {% if create_password %}Create Password{% else %}Login{% endif %}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Consolas,monospace;background:#080c14;min-height:100vh;
+display:flex;align-items:center;justify-content:center;
+background-image:radial-gradient(ellipse at 50% 0%,#0a1628,#080c14 70%)}
+.box{width:380px;padding:40px;border:1px solid rgba(0,255,136,.12);border-radius:4px;
+background:rgba(8,12,20,.9);box-shadow:0 0 60px rgba(0,255,136,.03)}
+h1{color:#00ff88;font-size:1.2em;letter-spacing:4px;text-align:center;margin-bottom:6px;text-transform:uppercase}
+.sub{color:#3a5a4a;font-size:.7em;text-align:center;margin-bottom:30px;letter-spacing:2px}
+label{display:block;color:#3a7a5a;font-size:.7em;letter-spacing:1.5px;margin-bottom:4px;text-transform:uppercase}
+input{width:100%;padding:10px 12px;background:#0a1020;border:1px solid #1a3a2a;color:#00ff88;
+font-family:inherit;font-size:.9em;border-radius:2px;margin-bottom:18px;outline:none;transition:.2s}
+input:focus{border-color:#00ff88;box-shadow:0 0 12px rgba(0,255,136,.1)}
+button{width:100%;padding:12px;background:transparent;border:1px solid #00ff88;color:#00ff88;
+font-family:inherit;font-size:.8em;letter-spacing:3px;text-transform:uppercase;cursor:pointer;
+transition:.2s;border-radius:2px}
+button:hover{background:#00ff88;color:#080c14}
+.err{color:#ff4444;font-size:.75em;text-align:center;margin-bottom:16px;padding:8px;
+border:1px solid rgba(255,68,68,.2);border-radius:2px;background:rgba(255,68,68,.05)}
+.welcome{color:#6a7a8a;font-size:.8em;margin-bottom:20px;text-align:center;line-height:1.6}
+.welcome strong{color:#00ff88}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>&#x26E8; CGS</h1>
+{% if create_password %}
+<div class="sub">create your password</div>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<div class="welcome">Welcome, <strong>{{ username }}</strong>.<br>Please create your password to access the dashboard.</div>
+<form method="POST" action="/api/create-password">
+<label>new password (min 16 characters)</label>
+<input name="new_password" type="password" autocomplete="new-password" required autofocus>
+<label>confirm password</label>
+<input name="confirm_password" type="password" autocomplete="new-password" required>
+<button type="submit">Create Password</button>
+</form>
+{% else %}
+<div class="sub">CGS &middot; autonomous micro-siem</div>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="POST">
+<label>username</label><input name="username" autocomplete="username" required autofocus>
+<label>password</label><input name="password" type="password" autocomplete="current-password" required>
+{% if totp_enabled %}<label>2fa code (if configured for your account)</label><input name="totp" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000">{% endif %}
+<button type="submit">Sign in</button>
+</form>
+{% endif %}
+</div>
+</body>
+</html>

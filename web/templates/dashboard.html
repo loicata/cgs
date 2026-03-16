@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CGS — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<style>
+:root{--bg:#080c14;--s1:#0c1220;--s2:#111828;--brd:#1a2438;--t1:#e0e8f0;--t2:#6a7a8a;
+--grn:#00ff88;--red:#ff3355;--org:#ff8833;--ylw:#ffcc00;--blu:#3399ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Consolas,monospace;background:var(--bg);color:var(--t1);font-size:13px}
+a{color:var(--grn);text-decoration:none}
+.nav{display:flex;align-items:center;gap:20px;padding:10px 20px;background:var(--s1);
+border-bottom:1px solid var(--brd);position:sticky;top:0;z-index:99;flex-wrap:wrap}
+.nav-brand{color:var(--grn);font-weight:700;font-size:1.1em;letter-spacing:3px}
+.nav-tabs{display:flex;gap:2px;margin-left:24px;flex-wrap:wrap}
+.nav-tab{padding:6px 16px;color:var(--t2);cursor:pointer;border-radius:3px;transition:.15s;
+font-size:.75em;letter-spacing:1px;text-transform:uppercase}
+.nav-tab:hover{color:var(--t1);background:rgba(255,255,255,.04)}
+.nav-tab.active{color:var(--grn);background:rgba(0,255,136,.08)}
+.nav-tab.admin-tab{color:#ff8833}
+.nav-tab.admin-tab.active{color:var(--org);background:rgba(255,136,51,.08)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:.75em;color:var(--t2)}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:p 2s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+.container{max-width:1440px;margin:0 auto;padding:16px}
+.section{display:none}.section.active{display:block}
+.row{display:grid;gap:12px;margin-bottom:12px}
+.r4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.r32{grid-template-columns:2fr 1fr}
+.r2{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.r2,.r32{grid-template-columns:1fr}}
+.card{background:var(--s1);border:1px solid var(--brd);border-radius:4px;padding:16px;overflow:hidden}
+.card-title{font-size:.7em;color:var(--t2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
+.metric{text-align:center;padding:12px 8px}
+.metric .v{font-size:2em;font-weight:700;line-height:1}
+.metric .l{font-size:.65em;color:var(--t2);margin-top:4px;letter-spacing:1px;text-transform:uppercase}
+.v-grn{color:var(--grn)}.v-red{color:var(--red)}.v-org{color:var(--org)}.v-ylw{color:var(--ylw)}.v-blu{color:var(--blu)}
+.tbl-wrap{overflow-x:auto;max-height:60vh;overflow-y:auto}
+table{width:100%;border-collapse:collapse}
+th{position:sticky;top:0;background:var(--s2);color:var(--t2);font-size:.65em;text-transform:uppercase;
+letter-spacing:1px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--brd)}
+td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.82em;white-space:nowrap}
+tr:hover{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;padding:1px 8px;border-radius:2px;font-size:.72em;font-weight:600}
+.b1{background:rgba(255,51,85,.15);color:var(--red)}.b2{background:rgba(255,136,51,.15);color:var(--org)}
+.b3{background:rgba(255,204,0,.12);color:var(--ylw)}.b4{background:rgba(51,153,255,.12);color:var(--blu)}
+.b5{background:rgba(255,255,255,.06);color:var(--t2)}
+.risk-bar{width:60px;height:6px;background:var(--s2);border-radius:3px;display:inline-block;vertical-align:middle;margin-right:6px}
+.risk-fill{height:100%;border-radius:3px}
+.btn-sm{padding:3px 10px;border:1px solid var(--brd);background:transparent;color:var(--t2);
+cursor:pointer;font-family:inherit;font-size:.72em;border-radius:2px;transition:.15s}
+.btn-sm:hover{border-color:var(--grn);color:var(--grn)}
+.btn-sm.danger:hover{border-color:var(--red);color:var(--red)}
+.btn-sm.warn:hover{border-color:var(--org);color:var(--org)}
+.feed{max-height:300px;overflow-y:auto;font-size:.78em}
+.feed-item{padding:6px 10px;border-left:2px solid var(--brd);margin-bottom:2px;background:rgba(255,255,255,.01);transition:background .3s}
+.feed-item.new{background:rgba(0,255,136,.08);border-left-color:var(--grn)}
+.feed-item .ts{color:var(--t2);font-size:.85em}
+pre.log-box{background:var(--s2);border:1px solid var(--brd);padding:12px;font-size:.75em;
+max-height:50vh;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2);margin-top:8px;border-radius:4px}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;color:var(--t2);font-size:.7em;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.form-group input,.form-group select{padding:6px 8px;background:var(--s2);border:1px solid var(--brd);
+color:var(--t1);font-family:inherit;font-size:.82em;border-radius:2px;width:100%;max-width:300px}
+.form-group input:focus{border-color:var(--grn);outline:none}
+.svc-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.svc-up{background:var(--grn)}.svc-down{background:var(--red)}.svc-unknown{background:var(--t2)}
+.admin-section-title{color:var(--org);font-size:.8em;letter-spacing:2px;text-transform:uppercase;
+margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid rgba(255,136,51,.2)}
+.modal-overlay{display:none !important;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex !important}
+.modal{background:var(--s1);border:1px solid var(--brd);border-radius:4px;padding:24px;max-width:450px;width:90%}
+.modal h3{color:var(--grn);margin-bottom:12px;font-size:.9em}
+</style>
+</head>
+<body>
+<div class="nav">
+<div class="nav-brand">&#x26E8; CGS <span style="font-weight:400;font-size:.65em;color:var(--t2);letter-spacing:1px">Server</span></div>
+<div class="nav-tabs">
+<div class="nav-tab active" data-t="overview">Overview</div>
+<div class="nav-tab" data-t="alerts">Alerts</div>
+<div class="nav-tab" data-t="inventory">Inventory</div>
+<div class="nav-tab" data-t="dns">DNS</div>
+<div class="nav-tab" data-t="system">System</div>
+<div class="nav-tab" data-t="compliance">Compliance</div>
+<div class="nav-tab" data-t="grc">GRC</div>
+{% if role == 'admin' %}
+<div class="nav-tab admin-tab" data-t="a-defense">Defense</div>
+<div class="nav-tab admin-tab" data-t="a-config">Config</div>
+<div class="nav-tab admin-tab" data-t="a-admin-email">Admin Email</div>
+<div class="nav-tab admin-tab" data-t="a-user-email">User Email</div>
+<div class="nav-tab admin-tab" data-t="a-logs">Logs</div>
+<div class="nav-tab admin-tab" data-t="a-users">Users</div>
+{% endif %}
+</div>
+<div class="nav-right">
+<div class="pulse"></div><span id="pps">—</span> pkt/s
+<span style="margin-left:8px" id="clock">—</span>
+<input id="global-search" type="text" placeholder="Search..." style="padding:4px 8px;background:var(--s2);border:1px solid var(--brd);color:var(--t1);font-family:inherit;font-size:.75em;border-radius:2px;width:150px" onkeyup="if(event.key==='Enter')globalSearch()">
+<span style="margin-left:8px;color:var(--t2)">{{ username }}</span>
+<a href="/logout" style="margin-left:8px;color:var(--t2)" title="Logout">&#x23FB;</a>
+</div>
+</div>
+<div class="container">
+
+<!-- ═══ OVERVIEW ═══ -->
+<div class="section active" id="s-overview">
+<div class="row r4">
+<div class="card metric"><div class="v v-red" id="m-crit">—</div><div class="l">Critical</div></div>
+<div class="card metric"><div class="v v-org" id="m-high">—</div><div class="l">High</div></div>
+<div class="card metric"><div class="v v-grn" id="m-hosts">—</div><div class="l">Active Hosts</div></div>
+<div class="card metric"><div class="v v-blu" id="m-ports">—</div><div class="l">Open ports</div></div>
+<div class="card metric"><div class="v v-ylw" id="m-scan">—</div><div class="l">Scanners</div></div>
+<div class="card metric"><div class="v v-org" id="m-bcn">—</div><div class="l">Beacons</div></div>
+</div>
+<div class="row r32">
+<div class="card"><div class="card-title">Real-time Flows</div>
+<div class="feed" id="live-feed"><div style="color:var(--t2);padding:20px;text-align:center">Waiting for events…</div></div></div>
+<div class="card"><div class="card-title">At-risk Hosts</div>
+<div class="tbl-wrap"><table><thead><tr><th>IP</th><th>Risk</th><th>OS</th></tr></thead>
+<tbody id="risk-hosts"></tbody></table></div></div>
+</div>
+</div>
+
+<!-- ═══ ALERTS ═══ -->
+<div class="section" id="s-alerts"><div class="card"><div class="card-title">Journal</div>
+<button class="btn-sm" onclick="window.open('/api/alerts/csv')" style="margin-bottom:8px">Export CSV</button>
+<div class="tbl-wrap" style="max-height:75vh"><table>
+<thead><tr><th>Time</th><th>Sev.</th><th>Source</th><th>Category</th><th>Title</th><th>IP</th><th>IOC</th><th></th></tr></thead>
+<tbody id="alert-tbl"></tbody></table></div></div></div>
+
+<!-- ═══ INVENTORY ═══ -->
+<div class="section" id="s-inventory"><div class="card"><div class="card-title">Network</div>
+<div class="tbl-wrap" style="max-height:75vh"><table>
+<thead><tr><th>IP</th><th>Hostname</th><th>MAC</th><th>Vendor</th><th>OS</th><th>Risk</th><th>Ports</th><th>Seen</th><th>Status</th></tr></thead>
+<tbody id="host-tbl"></tbody></table></div></div></div>
+
+<!-- ═══ DNS ═══ -->
+<div class="section" id="s-dns"><div class="card"><div class="card-title">Suspicious DNS (entropy &ge; 3.5)</div>
+<div class="tbl-wrap" style="max-height:75vh"><table>
+<thead><tr><th>Time</th><th>Source</th><th>Query</th><th>Entropy</th></tr></thead>
+<tbody id="dns-tbl"></tbody></table></div></div></div>
+
+<!-- ═══ SYSTEM ═══ -->
+<div class="section" id="s-system">
+<div class="row r4">
+<div class="card metric"><div class="v" id="sys-cpu">—</div><div class="l">CPU %</div></div>
+<div class="card metric"><div class="v" id="sys-ram">—</div><div class="l">RAM %</div></div>
+<div class="card metric"><div class="v" id="sys-pkts">—</div><div class="l">Packets</div></div>
+<div class="card metric"><div class="v v-grn" id="sys-mbps">—</div><div class="l">Mbit/s</div></div>
+</div>
+<div class="row r2">
+<div class="card"><div class="card-title">Baseline</div><div class="tbl-wrap"><table>
+<thead><tr><th>Metric</th><th>Value</th><th>&sigma;</th><th>Samp.</th></tr></thead>
+<tbody id="bl-tbl"></tbody></table></div></div>
+<div class="card"><div class="card-title">Interfaces</div><div class="tbl-wrap"><table>
+<thead><tr><th>Iface</th><th>IP</th><th>MAC</th><th>Status</th></tr></thead>
+<tbody id="net-tbl"></tbody></table></div></div>
+</div></div>
+
+<!-- ═══ COMPLIANCE ═══ -->
+<div class="section" id="s-compliance">
+
+<!-- Progress banner -->
+<div id="comp-banner" class="card" style="margin-bottom:12px;border-left:4px solid var(--grn);display:none">
+<div style="display:flex;align-items:center;gap:16px">
+<div style="flex:1">
+<div style="font-size:.8em;color:var(--t2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Compliance Progress</div>
+<div style="display:flex;align-items:center;gap:12px">
+<div style="font-size:2em;font-weight:700" id="comp-score">—</div>
+<div style="flex:1">
+<div style="background:var(--s2);height:8px;border-radius:4px;overflow:hidden">
+<div id="comp-progress-bar" style="height:100%;border-radius:4px;transition:width .5s;width:0%"></div>
+</div>
+<div style="display:flex;justify-content:space-between;font-size:.7em;color:var(--t2);margin-top:3px">
+<span><span id="comp-pass">0</span> passed</span>
+<span id="comp-unans-text"></span>
+<span>Risk: <strong id="comp-risk">—</strong></span>
+</div>
+</div>
+</div>
+</div>
+<div style="text-align:center;padding:0 16px;border-left:1px solid var(--brd)">
+<div style="font-size:.65em;color:var(--t2);text-transform:uppercase">Automated</div>
+<div style="font-size:1.4em;font-weight:700" id="comp-auto-score">—</div>
+</div>
+<div style="text-align:center;padding:0 16px;border-left:1px solid var(--brd)">
+<div style="font-size:.65em;color:var(--t2);text-transform:uppercase">Self-Assessed</div>
+<div style="font-size:1.4em;font-weight:700" id="comp-decl-score">—</div>
+</div>
+</div>
+</div>
+
+<!-- Frameworks + Actions -->
+<div class="row r2" style="margin-bottom:12px">
+<div class="card">
+<div class="card-title">Frameworks <span id="comp-fw-count" style="font-size:.85em;color:var(--t2);text-transform:none;letter-spacing:0"></span></div>
+<div id="comp-frameworks" style="display:flex;flex-wrap:wrap;gap:10px;font-size:.8em"></div>
+<div id="comp-fw-info" style="margin-top:8px;padding:8px 10px;border-radius:3px;font-size:.8em;display:none"></div>
+</div>
+<div class="card">
+<div class="card-title">Export</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<button class="btn-sm" onclick="fetchCompliance()">Refresh</button>
+<button class="btn-sm" onclick="downloadCompliancePdf()">Download PDF</button>
+<button class="btn-sm" onclick="downloadComplianceDocx()">Download DOCX</button>
+<button class="btn-sm" onclick="emailCompliance()">Email (PDF+DOCX)</button>
+<span id="comp-email-result" style="font-size:.75em"></span>
+</div>
+</div>
+</div>
+
+<!-- Score by category -->
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Score by Category</div>
+<div id="comp-cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px"></div>
+</div>
+
+<!-- Tab navigation: Automated / Self-Assessment / Recommendations -->
+<div style="display:flex;gap:2px;margin-bottom:12px">
+<div class="comp-tab active" data-ct="auto" onclick="compTabSwitch(this)">Automated Controls</div>
+<div class="comp-tab" data-ct="decl" onclick="compTabSwitch(this)">
+Self-Assessment <span id="comp-decl-badge" class="badge b2" style="margin-left:4px;font-size:.7em"></span>
+</div>
+<div class="comp-tab" data-ct="recs" onclick="compTabSwitch(this)">Recommendations</div>
+</div>
+
+<!-- Automated controls -->
+<div class="comp-panel active" id="comp-p-auto">
+<div class="card">
+<div class="tbl-wrap" style="max-height:60vh"><table>
+<thead><tr><th>ID</th><th>Control</th><th>Status</th><th>Detail</th><th>Frameworks</th></tr></thead>
+<tbody id="comp-auto-tbl"></tbody></table></div>
+</div>
+</div>
+
+<!-- Self-assessment panel -->
+<div class="comp-panel" id="comp-p-decl">
+<div class="card" style="margin-bottom:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<div>
+<div class="card-title" style="margin-bottom:2px">Organizational Assessment</div>
+<p style="color:var(--t2);font-size:.75em;margin:0">Complete each category to improve your compliance score. Only questions relevant to your selected frameworks are shown.</p>
+</div>
+<div style="font-size:.75em;color:var(--t2)" id="comp-decl-progress"></div>
+</div>
+<!-- Category navigation -->
+<div id="comp-decl-cats" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+</div>
+<!-- Category content area -->
+<div class="card">
+<div id="comp-decl-cat-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<div>
+<div id="comp-decl-cat-title" style="font-weight:700;font-size:1em;color:var(--t1)"></div>
+<div id="comp-decl-cat-sub" style="font-size:.75em;color:var(--t2);margin-top:2px"></div>
+</div>
+<div style="display:flex;gap:6px;align-items:center">
+<button class="btn-sm" onclick="compDeclPrev()" id="comp-decl-prev" style="display:none">Previous</button>
+<button class="btn-sm" onclick="compDeclNext()" id="comp-decl-next">Next category</button>
+</div>
+</div>
+<div id="comp-decl-list"></div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--brd)">
+<div style="font-size:.75em;color:var(--t2)" id="comp-decl-cat-progress"></div>
+<div style="display:flex;gap:6px">
+<button class="btn-sm" onclick="compDeclPrev()" id="comp-decl-prev2" style="display:none">Previous</button>
+<button class="btn-sm" onclick="compDeclNext()" id="comp-decl-next2">Next category</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Recommendations panel -->
+<div class="comp-panel" id="comp-p-recs">
+<div class="card">
+<div class="card-title">Priority Recommendations</div>
+<div id="comp-recs"></div>
+</div>
+</div>
+
+</div>
+
+<style>
+.comp-tab{padding:8px 18px;color:var(--t2);cursor:pointer;border-radius:3px 3px 0 0;
+font-size:.75em;letter-spacing:1px;text-transform:uppercase;border:1px solid transparent;border-bottom:none;
+transition:.15s}
+.comp-tab:hover{color:var(--t1);background:rgba(255,255,255,.03)}
+.comp-tab.active{color:var(--grn);background:var(--s1);border-color:var(--brd)}
+.comp-panel{display:none}.comp-panel.active{display:block}
+.decl-item{padding:12px;border:1px solid var(--brd);border-radius:4px;margin-bottom:8px;
+background:var(--s1);transition:border-color .2s}
+.decl-item:hover{border-color:var(--t2)}
+.decl-item.answered{border-left:3px solid var(--grn)}
+.decl-item.partial-ans{border-left:3px solid var(--org)}
+.decl-item.unanswered{border-left:3px solid var(--t2);opacity:.85}
+.decl-item .decl-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.decl-item .decl-id{color:var(--blu);font-size:.75em;font-weight:600;min-width:50px}
+.decl-item .decl-title{font-weight:600;font-size:.88em;flex:1}
+.decl-item .decl-status{font-size:.75em;font-weight:600;min-width:80px;text-align:right}
+.decl-item .decl-desc{color:var(--t2);font-size:.8em;margin:6px 0 8px 0;line-height:1.4}
+.decl-item .decl-fw{color:var(--blu);font-size:.65em;margin-top:6px;opacity:.7}
+.decl-item .decl-form{display:flex;gap:8px;align-items:stretch}
+.decl-item .decl-form select{padding:5px 8px;background:var(--s2);border:1px solid var(--brd);
+color:var(--t1);font-family:inherit;font-size:.82em;border-radius:3px;min-width:110px}
+.decl-item .decl-form select:focus{border-color:var(--grn);outline:none}
+.decl-item .decl-form input{flex:1;padding:5px 8px;background:var(--s2);border:1px solid var(--brd);
+color:var(--t1);font-family:inherit;font-size:.82em;border-radius:3px}
+.decl-item .decl-form input:focus{border-color:var(--grn);outline:none}
+.decl-item .decl-meta{font-size:.65em;color:var(--t2);margin-top:4px}
+.cat-card{background:var(--s1);border:1px solid var(--brd);border-radius:4px;padding:12px;text-align:center}
+.cat-card .cat-name{font-size:.7em;color:var(--t2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.cat-card .cat-score{font-size:1.6em;font-weight:700}
+.cat-card .cat-bar{height:4px;background:var(--s2);border-radius:2px;margin-top:6px;overflow:hidden}
+.cat-card .cat-fill{height:100%;border-radius:2px;transition:width .5s}
+.cat-card .cat-detail{font-size:.7em;color:var(--t2);margin-top:4px}
+.decl-cat-btn{padding:6px 14px;border:1px solid var(--brd);border-radius:3px;cursor:pointer;
+font-size:.75em;color:var(--t2);transition:.15s;display:flex;align-items:center;gap:6px}
+.decl-cat-btn:hover{border-color:var(--t1);color:var(--t1)}
+.decl-cat-btn.active{border-color:var(--grn);color:var(--grn);background:rgba(0,255,136,.06)}
+.decl-cat-btn.complete{border-color:var(--grn)}
+.decl-cat-btn .cat-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.decl-cat-btn .cat-count{font-size:.85em;opacity:.7}
+.grc-tab{padding:8px 18px;color:var(--t2);cursor:pointer;border-radius:3px 3px 0 0;
+font-size:.75em;letter-spacing:1px;text-transform:uppercase;border:1px solid transparent;border-bottom:none;transition:.15s}
+.grc-tab:hover{color:var(--t1);background:rgba(255,255,255,.03)}
+.grc-tab.active{color:var(--grn);background:var(--s1);border-color:var(--brd)}
+.grc-panel{display:none}.grc-panel.active{display:block}
+.risk-matrix td{width:36px;height:28px;text-align:center;font-size:.65em;font-weight:700;border:1px solid var(--brd)}
+.crit-bar{display:inline-flex;gap:1px}.crit-bar span{width:8px;height:14px;border-radius:1px}
+.crit-bar .filled{background:var(--org)}.crit-bar .empty{background:var(--s2)}
+.progress-sm{width:80px;height:8px;background:var(--s2);border-radius:4px;display:inline-block;vertical-align:middle}
+.progress-sm .fill{height:100%;border-radius:4px}
+.delta-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:.72em;font-weight:600;margin:0 4px}
+.delta-up{background:rgba(0,255,136,.12);color:var(--grn)}.delta-down{background:rgba(255,51,85,.12);color:var(--red)}
+.hist-bar-wrap{display:flex;align-items:flex-end;gap:6px;height:150px;padding:8px 0}
+.hist-bar{width:32px;background:var(--grn);border-radius:2px 2px 0 0;transition:height .3s;position:relative}
+.hist-bar span{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:.55em;color:var(--t2)}
+.vendor-q-item{padding:10px;border:1px solid var(--brd);border-radius:4px;margin-bottom:6px;background:var(--s1)}
+.vendor-q-item .q-text{font-size:.85em;margin-bottom:6px}
+.vendor-q-item select{padding:4px 8px;background:var(--s2);border:1px solid var(--brd);color:var(--t1);font-family:inherit;font-size:.8em;border-radius:3px}
+.finding-row{background:rgba(255,255,255,.02);border-left:3px solid var(--org)}
+</style>
+
+<!-- ═══ GRC ═══ -->
+<div class="section" id="s-grc">
+
+<!-- GRC sub-tab navigation -->
+<div style="display:flex;gap:2px;margin-bottom:12px;flex-wrap:wrap">
+<div class="grc-tab active" data-gt="risks" onclick="grcTabSwitch(this)">Risk Register</div>
+<div class="grc-tab" data-gt="assets" onclick="grcTabSwitch(this)">Assets</div>
+<div class="grc-tab" data-gt="evidence" onclick="grcTabSwitch(this)">Evidence</div>
+<div class="grc-tab" data-gt="history" onclick="grcTabSwitch(this)">History</div>
+<div class="grc-tab" data-gt="policies" onclick="grcTabSwitch(this)">Policies</div>
+<div class="grc-tab" data-gt="audits" onclick="grcTabSwitch(this)">Audits</div>
+<div class="grc-tab" data-gt="vendors" onclick="grcTabSwitch(this)">Third-Party</div>
+</div>
+
+<!-- ── Risks ── -->
+<div class="grc-panel active" id="grc-p-risks">
+<div class="row r4" id="grc-risk-metrics">
+<div class="card metric"><div class="v v-blu" id="grm-total">—</div><div class="l">Total Risks</div></div>
+<div class="card metric"><div class="v v-red" id="grm-crit">—</div><div class="l">Critical (≥15)</div></div>
+<div class="card metric"><div class="v v-org" id="grm-open">—</div><div class="l">Open</div></div>
+<div class="card metric"><div class="v v-ylw" id="grm-accepted">—</div><div class="l">Accepted</div></div>
+</div>
+<div class="row r2">
+<div class="card">
+<div class="card-title">Risk Matrix (Likelihood × Impact)</div>
+<table class="risk-matrix" style="margin:8px auto">
+<tr><td style="color:var(--t2);font-size:.6em">L5</td><td style="background:rgba(255,204,0,.15)">5</td><td style="background:rgba(255,136,51,.15)">10</td><td style="background:rgba(255,51,85,.15)">15</td><td style="background:rgba(255,51,85,.2)">20</td><td style="background:rgba(255,51,85,.3)">25</td></tr>
+<tr><td style="color:var(--t2);font-size:.6em">L4</td><td style="background:rgba(0,255,136,.08)">4</td><td style="background:rgba(255,204,0,.12)">8</td><td style="background:rgba(255,204,0,.18)">12</td><td style="background:rgba(255,136,51,.15)">16</td><td style="background:rgba(255,51,85,.15)">20</td></tr>
+<tr><td style="color:var(--t2);font-size:.6em">L3</td><td style="background:rgba(0,255,136,.06)">3</td><td style="background:rgba(0,255,136,.1)">6</td><td style="background:rgba(255,204,0,.12)">9</td><td style="background:rgba(255,204,0,.18)">12</td><td style="background:rgba(255,136,51,.15)">15</td></tr>
+<tr><td style="color:var(--t2);font-size:.6em">L2</td><td style="background:rgba(0,255,136,.04)">2</td><td style="background:rgba(0,255,136,.06)">4</td><td style="background:rgba(0,255,136,.1)">6</td><td style="background:rgba(255,204,0,.12)">8</td><td style="background:rgba(255,204,0,.15)">10</td></tr>
+<tr><td style="color:var(--t2);font-size:.6em">L1</td><td style="background:rgba(0,255,136,.03)">1</td><td style="background:rgba(0,255,136,.04)">2</td><td style="background:rgba(0,255,136,.06)">3</td><td style="background:rgba(0,255,136,.08)">4</td><td style="background:rgba(255,204,0,.1)">5</td></tr>
+<tr><td></td><td style="color:var(--t2);font-size:.6em">I1</td><td style="color:var(--t2);font-size:.6em">I2</td><td style="color:var(--t2);font-size:.6em">I3</td><td style="color:var(--t2);font-size:.6em">I4</td><td style="color:var(--t2);font-size:.6em">I5</td></tr>
+</table>
+</div>
+<div class="card">
+<div class="card-title">Risk Register</div>
+<button class="btn-sm" onclick="showGrcRiskModal()" style="margin-bottom:8px">+ Create Risk</button>
+<button class="btn-sm" onclick="window.open('/api/grc/risks/csv')" style="margin-bottom:8px">Export CSV</button>
+<input type="file" id="import-risks-file" accept=".csv" style="display:none" onchange="importCsv('risks')">
+<button class="btn-sm" onclick="document.getElementById('import-risks-file').click()" style="margin-bottom:8px">Import CSV</button>
+<div class="tbl-wrap" style="max-height:50vh"><table>
+<thead><tr><th>ID</th><th>Title</th><th>Category</th><th>L×I=Score</th><th>Owner</th><th>Status</th><th>Treatment</th><th></th></tr></thead>
+<tbody id="grc-risk-tbl"></tbody></table></div>
+</div>
+</div>
+</div>
+
+<!-- ── Assets ── -->
+<div class="grc-panel" id="grc-p-assets">
+<div class="card">
+<div class="card-title">Asset Inventory</div>
+<button class="btn-sm" onclick="showGrcAssetModal()" style="margin-bottom:8px">+ Create Asset</button>
+<button class="btn-sm" onclick="window.open('/api/grc/assets/csv')" style="margin-bottom:8px">Export CSV</button>
+<input type="file" id="import-assets-file" accept=".csv" style="display:none" onchange="importCsv('assets')">
+<button class="btn-sm" onclick="document.getElementById('import-assets-file').click()" style="margin-bottom:8px">Import CSV</button>
+<div class="tbl-wrap" style="max-height:70vh"><table>
+<thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Criticality</th><th>Classification</th><th>Location</th><th></th></tr></thead>
+<tbody id="grc-asset-tbl"></tbody></table></div>
+</div>
+</div>
+
+<!-- ── Evidence ── -->
+<div class="grc-panel" id="grc-p-evidence">
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Upload Evidence</div>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+<input id="ev-control" placeholder="Control ID" style="padding:5px 8px;background:var(--s2);border:1px solid var(--brd);color:var(--t1);font-family:inherit;font-size:.82em;border-radius:3px;width:120px">
+<input id="ev-file" type="file" style="font-size:.8em;color:var(--t2)">
+<input id="ev-desc" placeholder="Description" style="padding:5px 8px;background:var(--s2);border:1px solid var(--brd);color:var(--t1);font-family:inherit;font-size:.82em;border-radius:3px;flex:1;min-width:150px">
+<button class="btn-sm" onclick="uploadEvidence()">Upload</button>
+</div>
+</div>
+<div class="card">
+<div class="card-title">Evidence Library</div>
+<div class="tbl-wrap" style="max-height:60vh"><table>
+<thead><tr><th>Control ID</th><th>Filename</th><th>Size</th><th>Uploader</th><th>Date</th><th>Description</th><th></th></tr></thead>
+<tbody id="grc-evidence-tbl"></tbody></table></div>
+</div>
+</div>
+
+<!-- ── History ── -->
+<div class="grc-panel" id="grc-p-history">
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Score Deltas</div>
+<div id="grc-hist-deltas" style="display:flex;gap:12px;flex-wrap:wrap;padding:8px 0"></div>
+</div>
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Score History</div>
+<div id="grc-hist-chart" class="hist-bar-wrap"></div>
+</div>
+<div class="card">
+<button class="btn-sm" onclick="takeSnapshot()">Take Snapshot</button>
+<span id="grc-snap-result" style="margin-left:8px;font-size:.75em"></span>
+</div>
+</div>
+
+<!-- ── Policies ── -->
+<div class="grc-panel" id="grc-p-policies">
+<div class="card">
+<div class="card-title">Policies</div>
+<button class="btn-sm" onclick="showGrcPolicyModal()" style="margin-bottom:8px">+ Create Policy</button>
+<div class="tbl-wrap" style="max-height:70vh"><table>
+<thead><tr><th>Title</th><th>Version</th><th>Status</th><th>Author</th><th>Approver</th><th>Next Review</th><th>Acks</th><th></th></tr></thead>
+<tbody id="grc-policy-tbl"></tbody></table></div>
+</div>
+</div>
+
+<!-- ── Audits ── -->
+<div class="grc-panel" id="grc-p-audits">
+<div class="card">
+<div class="card-title">Audits</div>
+<button class="btn-sm" onclick="showGrcAuditModal()" style="margin-bottom:8px">+ Create Audit</button>
+<div class="tbl-wrap" style="max-height:70vh"><table>
+<thead><tr><th>Title</th><th>Scope</th><th>Auditor</th><th>Scheduled</th><th>Status</th><th>Findings</th><th></th></tr></thead>
+<tbody id="grc-audit-tbl"></tbody></table></div>
+</div>
+</div>
+
+<!-- ── Third-Party (Vendors) ── -->
+<div class="grc-panel" id="grc-p-vendors">
+<div class="card">
+<div class="card-title">Third-Party Vendors</div>
+<button class="btn-sm" onclick="showGrcVendorModal()" style="margin-bottom:8px">+ Create Vendor</button>
+<button class="btn-sm" onclick="window.open('/api/grc/vendors/csv')" style="margin-bottom:8px">Export CSV</button>
+<input type="file" id="import-vendors-file" accept=".csv" style="display:none" onchange="importCsv('vendors')">
+<button class="btn-sm" onclick="document.getElementById('import-vendors-file').click()" style="margin-bottom:8px">Import CSV</button>
+<div class="tbl-wrap" style="max-height:60vh"><table>
+<thead><tr><th>Name</th><th>Service</th><th>Criticality</th><th>Risk Score</th><th>Risk Level</th><th>Last Assessed</th><th></th></tr></thead>
+<tbody id="grc-vendor-tbl"></tbody></table></div>
+</div>
+<div class="card" id="grc-vendor-q-panel" style="margin-top:12px;display:none">
+<div class="card-title">Vendor Questionnaire — <span id="grc-vendor-q-name"></span></div>
+<div id="grc-vendor-q-list"></div>
+<div style="margin-top:12px">
+<button class="btn-sm" onclick="saveVendorAnswers()">Save Answers</button>
+<button class="btn-sm secondary" onclick="document.getElementById('grc-vendor-q-panel').style.display='none'">Close</button>
+</div>
+</div>
+</div>
+
+</div>
+
+<!-- GRC Modals -->
+<div class="modal-overlay" id="modal-risk">
+<div class="modal"><h3 id="modal-risk-title">Create Risk</h3>
+<div class="form-group"><label>Title</label><input id="gr-title"></div>
+<div class="form-group"><label>Description</label><input id="gr-desc"></div>
+<div class="form-group"><label>Category</label>
+<select id="gr-cat"><option value="operational">Operational</option><option value="technical">Technical</option><option value="legal">Legal</option><option value="financial">Financial</option><option value="strategic">Strategic</option></select></div>
+<div class="form-group"><label>Likelihood (1-5)</label><input id="gr-like" type="number" min="1" max="5" value="3"></div>
+<div class="form-group"><label>Impact (1-5)</label><input id="gr-impact" type="number" min="1" max="5" value="3"></div>
+<div class="form-group"><label>Owner</label><input id="gr-owner"></div>
+<div class="form-group"><label>Treatment</label>
+<select id="gr-treat"><option value="mitigate">Mitigate</option><option value="accept">Accept</option><option value="transfer">Transfer</option><option value="avoid">Avoid</option></select></div>
+<div class="form-group"><label>Treatment Plan</label><input id="gr-plan"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveGrcRisk()">Save</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-risk')">Cancel</button>
+</div></div></div>
+
+<div class="modal-overlay" id="modal-asset">
+<div class="modal"><h3 id="modal-asset-title">Create Asset</h3>
+<div class="form-group"><label>Name</label><input id="ga-name"></div>
+<div class="form-group"><label>Type</label>
+<select id="ga-type"><option value="server">Server</option><option value="application">Application</option><option value="data">Data</option><option value="service">Service</option><option value="person">Person</option></select></div>
+<div class="form-group"><label>Owner</label><input id="ga-owner"></div>
+<div class="form-group"><label>Criticality (1-5)</label><input id="ga-crit" type="number" min="1" max="5" value="3"></div>
+<div class="form-group"><label>Classification</label>
+<select id="ga-class"><option value="public">Public</option><option value="internal">Internal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option></select></div>
+<div class="form-group"><label>Location</label><input id="ga-loc"></div>
+<div class="form-group"><label>Description</label><input id="ga-desc"></div>
+<div class="form-group"><label>Dependencies</label><input id="ga-deps" placeholder="comma-separated"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveGrcAsset()">Save</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-asset')">Cancel</button>
+</div></div></div>
+
+<div class="modal-overlay" id="modal-policy">
+<div class="modal"><h3 id="modal-policy-title">Create Policy</h3>
+<div class="form-group"><label>Title</label><input id="gp-title"></div>
+<div class="form-group"><label>Content</label><textarea id="gp-content" style="width:100%;max-width:300px;min-height:100px;padding:6px 8px;background:var(--s2);border:1px solid var(--brd);color:var(--t1);font-family:inherit;font-size:.82em;border-radius:2px"></textarea></div>
+<div class="form-group"><label>Version</label><input id="gp-version" value="1.0"></div>
+<div class="form-group"><label>Author</label><input id="gp-author"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveGrcPolicy()">Save</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-policy')">Cancel</button>
+</div></div></div>
+
+<div class="modal-overlay" id="modal-audit">
+<div class="modal"><h3 id="modal-audit-title">Create Audit</h3>
+<div class="form-group"><label>Title</label><input id="gau-title"></div>
+<div class="form-group"><label>Scope</label><input id="gau-scope"></div>
+<div class="form-group"><label>Auditor</label><input id="gau-auditor"></div>
+<div class="form-group"><label>Scheduled Date</label><input id="gau-date" type="date"></div>
+<div class="form-group"><label>Status</label>
+<select id="gau-status"><option value="planned">Planned</option><option value="in_progress">In Progress</option><option value="completed">Completed</option></select></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveGrcAudit()">Save</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-audit')">Cancel</button>
+</div></div></div>
+
+<div class="modal-overlay" id="modal-finding">
+<div class="modal"><h3 id="modal-finding-title">Create Finding</h3>
+<input type="hidden" id="gf-audit-id">
+<div class="form-group"><label>Title</label><input id="gf-title"></div>
+<div class="form-group"><label>Severity</label>
+<select id="gf-sev"><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+<div class="form-group"><label>Description</label><input id="gf-desc"></div>
+<div class="form-group"><label>Recommendation</label><input id="gf-rec"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveGrcFinding()">Save</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-finding')">Cancel</button>
+</div></div></div>
+
+<div class="modal-overlay" id="modal-vendor">
+<div class="modal"><h3 id="modal-vendor-title">Create Vendor</h3>
+<div class="form-group"><label>Name</label><input id="gv-name"></div>
+<div class="form-group"><label>Service</label><input id="gv-service"></div>
+<div class="form-group"><label>Criticality (1-5)</label><input id="gv-crit" type="number" min="1" max="5" value="3"></div>
+<div class="form-group"><label>Contact</label><input id="gv-contact"></div>
+<div class="form-group"><label>Notes</label><input id="gv-notes"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveGrcVendor()">Save</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-vendor')">Cancel</button>
+</div></div></div>
+
+{% if role == 'admin' %}
+<!-- ═══ ADMIN: DEFENSE ═══ -->
+<div class="section" id="s-a-defense">
+<div class="admin-section-title">Active Defense</div>
+<div class="row r2">
+<div class="card">
+<div class="card-title">Services</div>
+<div id="a-services"></div>
+<div style="margin-top:12px">
+<button class="btn-sm warn" onclick="adminRestart()">Restart Service</button>
+</div>
+</div>
+<div class="card">
+<div class="card-title">Defense Stats</div>
+<div id="a-defense-stats"></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Iptables — CGS Chain</div>
+<pre class="log-box" id="a-iptables">Loading...</pre>
+<button class="btn-sm" onclick="fetchIptables()" style="margin-top:8px">Refresh</button>
+</div>
+<div class="card">
+<div class="card-title">Snapshots (Rollback)</div>
+<div class="tbl-wrap"><table>
+<thead><tr><th>Incident</th><th>Date</th><th>Reason</th><th>Size</th><th></th></tr></thead>
+<tbody id="a-snapshots"></tbody></table></div>
+</div>
+</div>
+
+<!-- ═══ ADMIN: CONFIG ═══ -->
+<div class="section" id="s-a-config">
+<div class="admin-section-title">Configuration</div>
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Report Options</div>
+<div id="a-report-opts"></div>
+</div>
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Backup</div>
+<button class="btn-sm" onclick="adminBackup()">Create Backup Now</button>
+<span id="a-backup-result" style="margin-left:8px;font-size:.75em"></span>
+<div class="tbl-wrap" style="margin-top:8px;max-height:200px"><table>
+<thead><tr><th>File</th><th>Size</th></tr></thead>
+<tbody id="a-backups"></tbody></table></div>
+</div>
+<div class="card">
+<div class="card-title">Security Checks</div>
+<div class="row r4" style="margin-top:8px">
+<button class="btn-sm" onclick="adminCheck('integrity')">Integrity</button>
+<button class="btn-sm" onclick="adminCheck('firewall')">Firewall</button>
+<button class="btn-sm" onclick="adminCheck('ssh')">SSH</button>
+<button class="btn-sm" onclick="adminCheck('os')">OS Hardening</button>
+</div>
+<pre class="log-box" id="a-check-result" style="min-height:40px"></pre>
+</div>
+</div>
+
+<!-- ═══ ADMIN: ADMIN EMAIL NOTIFICATION ═══ -->
+<div class="section" id="s-a-admin-email">
+<div class="admin-section-title">Admin Email Notification</div>
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">SMTP Configuration</div>
+<div id="a-smtp-config">
+<div class="row r2">
+<div class="form-group"><label>SMTP Server</label><input id="ae-smtp-server"></div>
+<div class="form-group"><label>SMTP Port</label><input id="ae-smtp-port" type="number" value="587"></div>
+</div>
+<div class="row r2">
+<div class="form-group"><label>SMTP User</label><input id="ae-smtp-user"></div>
+<div class="form-group"><label>SMTP Password</label><input id="ae-smtp-pass" type="password"></div>
+</div>
+<div class="form-group"><label>From Address</label><input id="ae-from" placeholder="sentinel@company.com"></div>
+<div class="form-group"><label>Admin Emails (comma separated)</label><input id="ae-admin-emails"></div>
+<div class="form-group"><label>Security Contact</label><input id="ae-contact"></div>
+<div class="row r2">
+<div class="form-group"><label>Approval Timeout (min)</label><input id="ae-approval-timeout" type="number" value="15"></div>
+<div class="form-group"><label>Max Shutdown Wait (min)</label><input id="ae-max-wait" type="number" value="30"></div>
+</div>
+<div style="margin-top:8px">
+<button class="btn-sm" onclick="saveAdminEmail()">Save</button>
+<span id="ae-save-result" style="margin-left:8px;font-size:.75em"></span>
+</div>
+</div>
+</div>
+<div class="card">
+<div class="card-title">Test Email</div>
+<div class="form-group"><label>Recipient</label><input id="a-email-to" placeholder="admin@company.com"></div>
+<button class="btn-sm" onclick="adminTestEmail()">Send Test</button>
+<span id="a-email-result" style="margin-left:8px;font-size:.75em"></span>
+</div>
+</div>
+
+<!-- ═══ ADMIN: USER EMAIL NOTIFICATION ═══ -->
+<div class="section" id="s-a-user-email">
+<div class="admin-section-title">User Email Notification</div>
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">User Accounts &amp; Devices</div>
+<p style="color:var(--t2);font-size:.8em;margin-bottom:12px">Users linked to network devices. They receive incident notifications and can log in to the dashboard.</p>
+<div style="margin-bottom:12px">
+<button class="btn-sm" onclick="showAddUserDevice()">+ Add User</button>
+<button class="btn-sm" onclick="scanForNewDevices()" style="margin-left:6px">Scan Network (ARP)</button>
+<span id="ue-scan-status" style="margin-left:8px;font-size:.75em;color:var(--t2)"></span>
+</div>
+<div class="tbl-wrap"><table>
+<thead><tr><th>Username</th><th>Email</th><th>IP</th><th>MAC</th><th>Hostname</th><th>Password Set</th><th></th></tr></thead>
+<tbody id="ue-users-tbl"></tbody></table></div>
+</div>
+
+<!-- Modal: Add User Device -->
+<div class="modal-overlay" id="modal-user-device">
+<div class="modal" style="max-width:400px">
+<div class="modal-title">Add User Account</div>
+<div class="form-group"><label>Username</label><input id="ud-username"></div>
+<div class="form-group"><label>Email</label><input id="ud-email" type="email"></div>
+<div class="form-group"><label>IP Address</label><input id="ud-ip"></div>
+<div class="form-group"><label>MAC Address</label><input id="ud-mac"></div>
+<div class="form-group"><label>Hostname</label><input id="ud-hostname"></div>
+<div class="btn-row"><button class="btn-sm" onclick="saveUserDevice()">Create</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-user-device')">Cancel</button></div>
+<span id="ud-result" style="font-size:.75em"></span>
+</div>
+</div>
+<div class="card" style="margin-bottom:12px">
+<div class="card-title">Welcome Email</div>
+<div class="form-group"><label>Invite Delay (minutes, 0 = immediate)</label>
+<input id="ue-invite-delay" type="number" value="60" style="width:120px"></div>
+<div style="margin-top:8px">
+<button class="btn-sm" onclick="saveUserEmail()">Save Delay</button>
+<button class="btn-sm" onclick="resendInvites()" style="margin-left:8px">Resend Welcome Emails</button>
+<span id="ue-result" style="margin-left:8px;font-size:.75em"></span>
+</div>
+</div>
+</div>
+
+<!-- ═══ ADMIN: LOGS ═══ -->
+<div class="section" id="s-a-logs">
+<div class="admin-section-title">Logs</div>
+<div style="margin-bottom:12px">
+<button class="btn-sm" onclick="adminLog('journal')" id="log-btn-journal">Journal</button>
+<button class="btn-sm" onclick="adminLog('app')">App Log</button>
+<button class="btn-sm" onclick="adminLog('defense-audit')">Defense Audit</button>
+<button class="btn-sm" onclick="adminLog('forensics')">Forensic Files</button>
+</div>
+<div class="card"><pre class="log-box" id="a-log-content" style="min-height:200px">Select a log source above.</pre></div>
+</div>
+
+<!-- ═══ ADMIN: USERS ═══ -->
+<div class="section" id="s-a-users">
+<div class="admin-section-title">User Accounts</div>
+<div class="card">
+<div style="margin-bottom:12px">
+<button class="btn-sm" onclick="showCreateUser()">+ Create User</button>
+</div>
+<div class="tbl-wrap"><table>
+<thead><tr><th>Username</th><th>Email</th><th>IP</th><th>Role</th><th>Active</th><th>2FA</th><th>Created</th><th>Last Login</th><th></th></tr></thead>
+<tbody id="a-users-tbl"></tbody></table></div>
+</div>
+</div>
+
+<!-- Modal: Create/Edit User -->
+<div class="modal-overlay" id="modal-user">
+<div class="modal" style="max-width:520px">
+<h3 id="modal-user-title">Create User</h3>
+<div style="margin-bottom:16px">
+<button class="btn-sm" id="mu-tab-admin" onclick="muShowTab('admin')" style="border-color:var(--grn);color:var(--grn)">Admin</button>
+<button class="btn-sm" id="mu-tab-user" onclick="muShowTab('user')">User</button>
+</div>
+
+<!-- Admin form -->
+<div id="mu-panel-admin">
+<div class="form-group"><label>Username</label><input id="mu-username"></div>
+<div class="form-group"><label>Email</label><input id="mu-email" type="email"></div>
+<div class="form-group"><label>Password (min 16 characters)</label><input id="mu-password" type="password"></div>
+<div class="form-group"><label>Company (optional)</label><input id="mu-company" placeholder="Used in compliance reports"></div>
+<input type="hidden" id="mu-role" value="admin">
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveUser()">Create Admin</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-user')">Cancel</button>
+</div>
+</div>
+
+<!-- User form: scan network -->
+<div id="mu-panel-user" style="display:none">
+<p style="color:var(--t2);font-size:.8em;margin-bottom:12px">Scan the network to find devices, then assign a username and email. Users will create their own password on first login.</p>
+<button class="btn-sm" onclick="muScanNetwork()">Scan Network (ARP)</button>
+<span id="mu-scan-status" style="margin-left:8px;font-size:.75em;color:var(--t2)"></span>
+<div id="mu-scan-results" style="max-height:300px;overflow-y:auto;margin-top:12px"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="muSaveUsers()">Create Accounts</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-user')">Cancel</button>
+</div>
+</div>
+
+<div id="mu-error" style="color:var(--red);font-size:.75em;margin-top:8px"></div>
+</div>
+</div>
+
+<!-- Modal: Add Directory Entry -->
+<div class="modal-overlay" id="modal-dir">
+<div class="modal">
+<h3>Add Directory Entry</h3>
+<div class="form-group"><label>IP</label><input id="md-ip"></div>
+<div class="form-group"><label>MAC</label><input id="md-mac" placeholder="optional"></div>
+<div class="form-group"><label>Name</label><input id="md-name"></div>
+<div class="form-group"><label>Email</label><input id="md-email"></div>
+<div class="form-group"><label>Hostname</label><input id="md-hostname" placeholder="optional"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button class="btn-sm" onclick="saveDirEntry()">Save</button>
+<button class="btn-sm secondary" onclick="closeModal('modal-dir')">Cancel</button>
+</div>
+</div>
+</div>
+{% endif %}
+
+<div class="modal-overlay" id="modal-search">
+<div class="modal" style="max-width:700px;max-height:80vh;overflow-y:auto">
+<h3>Search Results <span id="search-count" style="color:var(--t2);font-size:.7em"></span></h3>
+<div id="search-results"></div>
+<button class="btn-sm secondary" onclick="closeModal('modal-search')" style="margin-top:12px">Close</button>
+</div></div>
+
+</div>
+<script>
+const IS_ADMIN = {{ 'true' if role == 'admin' else 'false' }};
+let editUserId=null;
+function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
+document.querySelectorAll('.nav-tab').forEach(t=>{t.onclick=()=>{
+document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
+document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
+t.classList.add('active');document.getElementById('s-'+t.dataset.t).classList.add('active');
+// Lazy-load admin data
+if(t.dataset.t==='compliance')fetchCompliance();
+if(t.dataset.t==='grc')fetchGrcRisks();
+if(IS_ADMIN){
+const tab=t.dataset.t;
+if(tab==='a-defense')fetchAdminDefense();
+else if(tab==='a-config')fetchAdminConfig();
+else if(tab==='a-admin-email')fetchAdminEmail();
+else if(tab==='a-user-email')fetchUserEmail();
+else if(tab==='a-users')fetchAdminUsers();
+}}});
+const SB={1:'b1',2:'b2',3:'b3',4:'b4',5:'b5'},SL={1:'CRIT',2:'HIGH',3:'MED',4:'LOW',5:'INFO'};
+const fmt=i=>{if(!i)return'—';const d=new Date(i);return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+const fmtD=i=>{if(!i)return'—';const d=new Date(i);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit'})+' '+fmt(i)};
+function rb(s){const c=s>=70?'var(--red)':s>=40?'var(--org)':s>=10?'var(--ylw)':'var(--grn)';
+return`<span class="risk-bar"><span class="risk-fill" style="width:${esc(s)}%;background:${c}"></span></span>${esc(s)}`;}
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
+let _csrfToken='';
+async function getCsrf(){try{const r=await fetch('/api/csrf-token'),d=await r.json();_csrfToken=d.token;return _csrfToken;}catch(e){return'';}}
+getCsrf();setInterval(getCsrf,1800000);
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+
+// ═══ USER DATA FETCHERS ═══
+async function fetchOv(){try{const r=await fetch('/api/overview'),d=await r.json();
+document.getElementById('m-crit').textContent=d.alerts.crit;
+document.getElementById('m-high').textContent=d.alerts.high;
+document.getElementById('m-hosts').textContent=d.network.hosts_up;
+document.getElementById('m-ports').textContent=d.network.open_ports;
+if(d.threats){document.getElementById('m-scan').textContent=d.threats.active_scanners||0;
+document.getElementById('m-bcn').textContent=d.threats.beacon_pairs||0;
+document.getElementById('risk-hosts').innerHTML=(d.threats.top_risk_hosts||[]).map(h=>
+`<tr><td>${esc(h.ip)}</td><td>${rb(h.score)}</td><td>${esc(h.os)||'—'}</td></tr>`).join('')||
+'<tr><td colspan=3 style="color:var(--t2)">None</td></tr>';}
+if(d.sniffer){document.getElementById('pps').textContent=d.sniffer.pps||0;
+document.getElementById('sys-pkts').textContent=(d.sniffer.packets||0).toLocaleString();
+document.getElementById('sys-mbps').textContent=d.sniffer.mbps||0;}
+}catch(e){}}
+
+async function fetchAl(){try{const r=await fetch('/api/alerts?limit=200'),data=await r.json();
+document.getElementById('alert-tbl').innerHTML=data.map(a=>
+`<tr><td>${esc(fmtD(a.ts))}</td><td><span class="badge ${SB[a.severity]}">${SL[a.severity]}</span></td>
+<td>${esc(a.source)}</td><td>${esc(a.category)}</td><td>${esc((a.title||'').substring(0,70))}</td>
+<td style="font-size:.75em">${esc(a.src_ip)}${a.dst_ip?' → '+esc(a.dst_ip):''}</td>
+<td style="font-size:.7em;max-width:120px;overflow:hidden;text-overflow:ellipsis">${esc(a.ioc)}</td>
+<td>${a.ack?'✓':'<button class="btn-sm" onclick="ack('+parseInt(a.id)+')">Ack</button>'}</td></tr>`).join('');}catch(e){}}
+
+async function ack(id){await getCsrf();await fetch('/api/alerts/'+parseInt(id)+'/ack',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});fetchAl();}
+
+async function fetchH(){try{const r=await fetch('/api/hosts'),data=await r.json();
+document.getElementById('host-tbl').innerHTML=data.map(h=>
+`<tr><td><strong>${esc(h.ip)}</strong></td><td>${esc(h.hostname)||'—'}</td>
+<td style="font-size:.75em">${esc(h.mac)||'—'}</td><td>${esc(h.vendor)||'—'}</td>
+<td>${esc(h.os)||'—'}</td><td>${rb(h.risk)}</td>
+<td>${(h.ports||[]).map(p=>'<span class="badge b4" style="margin:1px">'+esc(p.port)+'</span>').join(' ')}</td>
+<td style="font-size:.75em">${esc(fmtD(h.last))}</td>
+<td>${h.status==='up'?'<span style="color:var(--grn)">●</span>':'<span style="color:var(--red)">●</span>'} ${esc(h.status)}</td></tr>`).join('');}catch(e){}}
+
+async function fetchDns(){try{const r=await fetch('/api/dns?suspicious=1&limit=100'),data=await r.json();
+document.getElementById('dns-tbl').innerHTML=data.map(d=>
+`<tr><td>${esc(fmtD(d.ts))}</td><td>${esc(d.src)}</td>
+<td style="font-size:.75em;max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(d.query)}</td>
+<td><span class="badge ${d.entropy>=4?'b1':'b2'}">${esc(d.entropy.toFixed(2))}</span></td></tr>`).join('')
+||'<tr><td colspan=4 style="color:var(--t2)">None</td></tr>';}catch(e){}}
+
+async function fetchSys(){try{const r=await fetch('/api/health'),d=await r.json();
+if(d.system){const s=d.system;
+document.getElementById('sys-cpu').textContent=s.cpu_percent+'%';
+document.getElementById('sys-cpu').className='v '+(s.cpu_percent>80?'v-red':s.cpu_percent>60?'v-org':'v-grn');
+document.getElementById('sys-ram').textContent=s.memory_percent+'%';
+document.getElementById('sys-ram').className='v '+(s.memory_percent>85?'v-red':'v-grn');}
+if(d.network){document.getElementById('net-tbl').innerHTML=Object.entries(d.network).map(([n,i])=>
+`<tr><td>${esc(n)}</td><td>${esc(i.ip)||'—'}</td><td style="font-size:.75em">${esc(i.mac)||'—'}</td>
+<td>${i.up?'<span style="color:var(--grn)">UP</span>':'<span style="color:var(--red)">DOWN</span>'}</td></tr>`).join('');}
+}catch(e){}
+try{const r=await fetch('/api/baseline'),data=await r.json();
+document.getElementById('bl-tbl').innerHTML=data.map(b=>
+`<tr><td>${esc(b.key)}</td><td>${esc(b.value)}</td><td>±${esc(b.std)}</td><td>${esc(b.samples)}</td></tr>`).join('')
+||'<tr><td colspan=4 style="color:var(--t2)">Learning…</td></tr>';}catch(e){}}
+
+const socket=io('/live',{transports:['websocket','polling']});
+const feed=document.getElementById('live-feed');let fi=false;
+socket.on('alert',function(a){if(!fi){feed.innerHTML='';fi=true;}
+const el=document.createElement('div');el.className='feed-item new';
+el.innerHTML=`<span class="badge ${SB[a.severity]}">${SL[a.severity]}</span> <span class="ts">${esc(fmt(a.ts))}</span> <strong>${esc(a.source)}</strong> ${esc(a.title)}${a.src_ip?' <span style="color:var(--t2);font-size:.8em">'+esc(a.src_ip)+'</span>':''}`;
+feed.prepend(el);setTimeout(()=>el.classList.remove('new'),3000);
+if(feed.children.length>100)feed.lastChild.remove();fetchOv();});
+
+function all(){fetchOv();fetchAl();fetchH();fetchDns();fetchSys();}
+all();setInterval(all,15000);
+
+// ═══ COMPLIANCE ═══
+let compFrameworksInit=false;
+function getSelectedFrameworks(){
+const checks=document.querySelectorAll('#comp-frameworks input[type=checkbox]');
+if(!checks.length)return'';
+const sel=[];checks.forEach(c=>{if(c.checked)sel.push(c.value);});
+return sel.join(',');
+}
+function downloadCompliancePdf(){
+const fw=getSelectedFrameworks();
+window.open('/api/compliance/pdf'+(fw?'?frameworks='+fw:''),'_blank');
+}
+function downloadComplianceDocx(){
+const fw=getSelectedFrameworks();
+window.open('/api/compliance/docx'+(fw?'?frameworks='+fw:''),'_blank');
+}
+function compTabSwitch(el){
+document.querySelectorAll('.comp-tab').forEach(t=>t.classList.remove('active'));
+document.querySelectorAll('.comp-panel').forEach(p=>p.classList.remove('active'));
+el.classList.add('active');
+document.getElementById('comp-p-'+el.dataset.ct).classList.add('active');
+}
+async function fetchCompliance(){
+try{
+const fw=getSelectedFrameworks();
+const r=await fetch('/api/compliance'+(fw?'?frameworks='+fw:'')),d=await r.json();
+// Init framework checkboxes
+if(!compFrameworksInit&&d.available_frameworks){
+const c=document.getElementById('comp-frameworks');c.innerHTML='';
+Object.entries(d.available_frameworks).forEach(([id,info])=>{
+c.innerHTML+=`<label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+<input type="checkbox" value="${id}" checked onchange="fetchCompliance()">
+<span>${esc(info.name)}</span></label>`;});
+compFrameworksInit=true;}
+// Banner
+document.getElementById('comp-banner').style.display='';
+const sc=d.score||0;
+const scC=sc>=80?'var(--grn)':sc>=60?'var(--ylw)':sc>=40?'var(--org)':'var(--red)';
+document.getElementById('comp-score').textContent=sc+'/100';
+document.getElementById('comp-score').style.color=scC;
+document.getElementById('comp-progress-bar').style.width=sc+'%';
+document.getElementById('comp-progress-bar').style.background=scC;
+document.getElementById('comp-banner').style.borderLeftColor=scC;
+document.getElementById('comp-pass').textContent=d.passed||0;
+const ua=d.unanswered||0;
+document.getElementById('comp-unans-text').textContent=ua>0?ua+' unanswered':'All answered';
+document.getElementById('comp-unans-text').style.color=ua>0?'var(--org)':'var(--grn)';
+const rl=d.risk_level||'?';
+document.getElementById('comp-risk').textContent=rl;
+document.getElementById('comp-risk').style.color=rl==='LOW'?'var(--grn)':rl==='MEDIUM'?'var(--ylw)':rl==='HIGH'?'var(--org)':'var(--red)';
+const asc=d.auto_score||0;
+document.getElementById('comp-auto-score').textContent=asc+'/100';
+document.getElementById('comp-auto-score').style.color=asc>=80?'var(--grn)':asc>=60?'var(--ylw)':'var(--org)';
+const dsc=d.declarative_score;
+document.getElementById('comp-decl-score').textContent=dsc!==null?dsc+'/100':'N/A';
+document.getElementById('comp-decl-score').style.color=dsc===null?'var(--t2)':dsc>=80?'var(--grn)':dsc>=60?'var(--ylw)':'var(--org)';
+// Category cards
+const cats=d.categories||{};
+document.getElementById('comp-cat-grid').innerHTML=Object.entries(cats).map(([name,c])=>{
+const cs=Math.round(c.pass/Math.max(c.total,1)*100);
+const cc=cs>=80?'var(--grn)':cs>=50?'var(--org)':'var(--red)';
+return`<div class="cat-card">
+<div class="cat-name">${esc(name)}</div>
+<div class="cat-score" style="color:${cc}">${cs}%</div>
+<div class="cat-bar"><div class="cat-fill" style="width:${cs}%;background:${cc}"></div></div>
+<div class="cat-detail">${c.pass}/${c.total} passed${c.unanswered?' · '+c.unanswered+' pending':''}</div>
+</div>`;}).join('');
+// Automated table
+const autoCtrl=(d.controls||[]).filter(c=>c.type==='automated');
+document.getElementById('comp-auto-tbl').innerHTML=autoCtrl.map(c=>{
+const stc=c.status==='PASS'?'var(--grn)':'var(--red)';
+const fwRefs=Object.entries(c.mappings||{}).filter(([k,v])=>v!=='—').map(([k,v])=>v).join(', ');
+return`<tr><td><strong>${esc(c.id)}</strong></td><td>${esc(c.title)}</td>
+<td style="color:${stc};font-weight:600">${c.status}</td>
+<td style="font-size:.75em">${esc(c.detail||'')}</td>
+<td style="font-size:.65em;color:var(--t2);max-width:150px;overflow:hidden;text-overflow:ellipsis">${esc(fwRefs)}</td></tr>`;}).join('');
+// Declarative controls: filter by selected frameworks + group by category
+const selFw=Object.keys(d.frameworks||{});
+const allDecl=(d.controls||[]).filter(c=>c.type==='declarative');
+// Filter: only show questions relevant to selected frameworks
+let declCtrl=allDecl.filter(c=>{
+const m=c.mappings||{};
+return selFw.some(fw=>m[fw]&&m[fw]!=='—');
+});
+// Update framework question counter
+const nFw=selFw.length;
+const nTotal=allDecl.length;
+const nShown=declCtrl.length;
+const nHidden=nTotal-nShown;
+document.getElementById('comp-fw-count').textContent=`— ${nFw} selected`;
+const infoEl=document.getElementById('comp-fw-info');
+if(declCtrl.length>0){
+const nAnswered=declCtrl.filter(c=>c.answer&&c.answer!=='unanswered').length;
+const nRemaining=declCtrl.length-nAnswered;
+infoEl.style.display='';
+if(nRemaining===0){
+infoEl.style.background='rgba(0,255,136,.08)';infoEl.style.color='var(--grn)';
+infoEl.innerHTML=`<strong>All ${nShown} questions answered.</strong> Your self-assessment is complete.`;
+}else{
+infoEl.style.background='rgba(51,153,255,.06)';infoEl.style.color='var(--t1)';
+infoEl.innerHTML=`<strong>${nShown} questions</strong> to answer for the selected frameworks `+
+(nAnswered>0?`(${nAnswered} done, <strong>${nRemaining} remaining</strong>). `:'. ')+
+(nHidden>0?`<span style="color:var(--t2)">${nHidden} questions hidden (not relevant to selected frameworks). Deselect frameworks above to reduce further.</span>`
+:`<span style="color:var(--t2)">Deselect frameworks above to reduce the number of questions.</span>`);
+}
+}else{
+infoEl.style.display='';infoEl.style.background='rgba(255,136,51,.08)';infoEl.style.color='var(--org)';
+infoEl.innerHTML='No frameworks selected — select at least one framework above.';
+}
+
+const declUa=declCtrl.filter(c=>c.status==='UNANSWERED').length;
+document.getElementById('comp-decl-badge').textContent=declUa>0?declUa+' pending':'done';
+document.getElementById('comp-decl-badge').className='badge '+(declUa>0?'b2':'b4');
+document.getElementById('comp-decl-progress').textContent=
+(declCtrl.length-declUa)+'/'+declCtrl.length+' completed';
+
+// Group by category
+window._declCats={};window._declCatOrder=[];
+declCtrl.forEach(c=>{
+if(!window._declCats[c.category]){window._declCats[c.category]=[];window._declCatOrder.push(c.category);}
+window._declCats[c.category].push(c);
+});
+
+// Render category nav buttons
+const catNav=document.getElementById('comp-decl-cats');
+catNav.innerHTML=window._declCatOrder.map((cat,i)=>{
+const items=window._declCats[cat];
+const answered=items.filter(c=>c.answer&&c.answer!=='unanswered').length;
+const total=items.length;
+const complete=answered===total;
+const dotColor=complete?'var(--grn)':answered>0?'var(--org)':'var(--t2)';
+return`<div class="decl-cat-btn${i===0?' active':''}${complete?' complete':''}" data-cat="${esc(cat)}" onclick="compDeclShowCat('${esc(cat)}',this)">
+<span class="cat-dot" style="background:${dotColor}"></span>
+${esc(cat)} <span class="cat-count">${answered}/${total}</span>
+</div>`;}).join('');
+
+// Show first category
+if(window._declCatOrder.length)compDeclShowCat(window._declCatOrder[0]);
+// Recommendations
+const recs=d.recommendations||[];
+document.getElementById('comp-recs').innerHTML=recs.slice(0,20).map(r=>{
+const pc=r.weight>=8?'var(--red)':r.weight>=6?'var(--org)':'var(--ylw)';
+const pl=r.weight>=8?'HIGH':r.weight>=6?'MEDIUM':'LOW';
+const tp=r.type==='declarative'?' · SELF-ASSESS':'';
+const act=r.type==='declarative'?
+` <button class="btn-sm" style="font-size:.65em;padding:1px 8px;margin-left:6px" onclick="compTabSwitch(document.querySelector('[data-ct=decl]'));compFilter('unanswered',document.querySelectorAll('.comp-filter')[1])">Answer now</button>`:'';
+return`<div style="padding:8px 0;border-bottom:1px solid var(--brd)">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="color:${pc};font-weight:700;font-size:.75em;min-width:50px">${pl}${tp}</span>
+<div style="flex:1">
+<strong>${esc(r.id)}</strong> ${esc(r.title)}${act}<br>
+<span style="color:var(--t2);font-size:.8em">${esc(r.recommendation)}</span>
+</div></div></div>`;}).join('')||'<div style="color:var(--grn);padding:20px;text-align:center;font-size:1.1em">All controls passed — full compliance achieved.</div>';
+}catch(e){console.error('Compliance:',e);}}
+
+window._currentDeclCat=0;
+function compDeclShowCat(catName,btn){
+const cats=window._declCats||{};
+const order=window._declCatOrder||[];
+const idx=order.indexOf(catName);
+window._currentDeclCat=idx;
+const items=cats[catName]||[];
+
+// Update nav buttons
+document.querySelectorAll('.decl-cat-btn').forEach(b=>b.classList.remove('active'));
+if(btn)btn.classList.add('active');
+else{const btns=document.querySelectorAll('.decl-cat-btn');if(btns[idx])btns[idx].classList.add('active');}
+
+// Header
+document.getElementById('comp-decl-cat-title').textContent=catName;
+const answered=items.filter(c=>c.answer&&c.answer!=='unanswered').length;
+document.getElementById('comp-decl-cat-sub').textContent=
+answered===items.length?'All questions answered':''+answered+' of '+items.length+' answered — '+(items.length-answered)+' remaining';
+document.getElementById('comp-decl-cat-progress').textContent=
+'Category: '+answered+'/'+items.length+' complete'+(idx<order.length-1?' — Next: '+order[idx+1]:'');
+
+// Nav buttons
+const hasPrev=idx>0;
+const hasNext=idx<order.length-1;
+['comp-decl-prev','comp-decl-prev2'].forEach(id=>{document.getElementById(id).style.display=hasPrev?'':'none';});
+['comp-decl-next','comp-decl-next2'].forEach(id=>{
+const el=document.getElementById(id);
+el.style.display='';
+el.textContent=hasNext?'Next: '+order[idx+1]:'Assessment complete';
+if(!hasNext)el.style.borderColor='var(--grn)';else el.style.borderColor='';
+});
+
+// Render items
+document.getElementById('comp-decl-list').innerHTML=items.map(c=>{
+const ans=c.answer||'unanswered';
+const cls=ans==='yes'?'answered':ans==='partial'?'partial-ans':'unanswered';
+const stc=c.status==='PASS'?'var(--grn)':c.status==='PARTIAL'?'var(--org)':c.status==='UNANSWERED'?'var(--t2)':'var(--red)';
+const stLabel=c.status==='UNANSWERED'?'PENDING':c.status;
+const fwRefs=Object.entries(c.mappings||{}).filter(([k,v])=>v!=='—').map(([k,v])=>v).join(' · ');
+const impact=Math.min(10,Math.round((c.weight||4)/8*10));
+const impC=impact>=8?'var(--red)':impact>=5?'var(--org)':'var(--ylw)';
+const impDots='<span style="letter-spacing:-1px">'+('●'.repeat(impact))+'</span>'+'<span style="opacity:.2;letter-spacing:-1px">'+('●'.repeat(10-impact))+'</span>';
+return`<div class="decl-item ${cls}" data-ans="${ans}" data-id="${esc(c.id)}">
+<div class="decl-header">
+<span class="decl-id">${esc(c.id)}</span>
+<span class="decl-title">${esc(c.title)}</span>
+<span style="font-size:.65em;color:${impC};min-width:90px;text-align:right" title="Impact on compliance score: ${impact}/10">Impact ${impact}/10 ${impDots}</span>
+<span class="decl-status" style="color:${stc};min-width:60px">${stLabel}</span>
+</div>
+<div class="decl-desc">${esc(c.prompt||c.description)}</div>
+<div class="decl-form">
+<select data-cid="${esc(c.id)}" onchange="saveCompAnswer('${esc(c.id)}',this.value,this.parentElement.querySelector('input').value)">
+<option value="unanswered" ${ans==='unanswered'?'selected':''}>— Select answer —</option>
+<option value="yes" ${ans==='yes'?'selected':''}>Yes — Fully implemented</option>
+<option value="partial" ${ans==='partial'?'selected':''}>Partial — In progress</option>
+<option value="no" ${ans==='no'?'selected':''}>No — Not implemented</option>
+</select>
+<input placeholder="Evidence, date, reference document..." value="${esc(c.answer_detail||'')}"
+  onchange="saveCompAnswer('${esc(c.id)}',this.parentElement.querySelector('select').value,this.value)">
+</div>
+${fwRefs?`<div class="decl-fw">${esc(fwRefs)}</div>`:''}
+${c.answered_by?`<div class="decl-meta">Last updated by ${esc(c.answered_by)}</div>`:''}
+</div>`;}).join('');
+}
+function compDeclNext(){
+const order=window._declCatOrder||[];
+const next=window._currentDeclCat+1;
+if(next<order.length)compDeclShowCat(order[next]);
+}
+function compDeclPrev(){
+const order=window._declCatOrder||[];
+const prev=window._currentDeclCat-1;
+if(prev>=0)compDeclShowCat(order[prev]);
+}
+
+async function saveCompAnswer(controlId,answer,detail){
+try{await getCsrf();
+await fetch('/api/compliance/answers',{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},
+body:JSON.stringify({control_id:controlId,answer:answer,detail:detail||''})});
+// Refresh scores after a short delay
+setTimeout(()=>fetchCompliance(),500);
+}catch(e){console.error('Save answer:',e);}}
+
+async function emailCompliance(){
+const res=document.getElementById('comp-email-result');
+const to=prompt('Send compliance report to:','');
+if(!to)return;
+res.textContent='Sending...';res.style.color='var(--ylw)';
+try{await getCsrf();
+const fw=getSelectedFrameworks();
+const r=await fetch('/api/compliance/email'+(fw?'?frameworks='+fw:''),{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},
+body:JSON.stringify({to:to})});
+const d=await r.json();
+res.textContent=d.ok?'Sent to '+esc(d.to):'Error: '+esc(d.error);
+res.style.color=d.ok?'var(--grn)':'var(--red)';
+}catch(e){res.textContent='Error';res.style.color='var(--red)';}}
+
+// ═══ GRC ═══
+let _editRiskId=null,_editAssetId=null,_editPolicyId=null,_editAuditId=null,_editVendorId=null,_currentVendorId=null;
+
+function grcTabSwitch(el){
+document.querySelectorAll('.grc-tab').forEach(t=>t.classList.remove('active'));
+document.querySelectorAll('.grc-panel').forEach(p=>p.classList.remove('active'));
+el.classList.add('active');
+document.getElementById('grc-p-'+el.dataset.gt).classList.add('active');
+const loaders={risks:fetchGrcRisks,assets:fetchGrcAssets,evidence:fetchGrcEvidence,
+history:fetchGrcHistory,policies:fetchGrcPolicies,audits:fetchGrcAudits,vendors:fetchGrcVendors};
+if(loaders[el.dataset.gt])loaders[el.dataset.gt]();
+}
+
+// ── Risks ──
+function showGrcRiskModal(r){_editRiskId=r?r.id:null;
+document.getElementById('modal-risk-title').textContent=r?'Edit Risk':'Create Risk';
+document.getElementById('gr-title').value=r?r.title:'';
+document.getElementById('gr-desc').value=r?r.description:'';
+document.getElementById('gr-cat').value=r?r.category:'operational';
+document.getElementById('gr-like').value=r?r.likelihood:3;
+document.getElementById('gr-impact').value=r?r.impact:3;
+document.getElementById('gr-owner').value=r?r.owner:'';
+document.getElementById('gr-treat').value=r?r.treatment:'mitigate';
+document.getElementById('gr-plan').value=r?r.treatment_plan:'';
+document.getElementById('modal-risk').classList.add('show');}
+
+async function fetchGrcRisks(){try{const r=await fetch('/api/grc/risks'),data=await r.json();
+const risks=data.risks||data||[];
+let total=risks.length,crit=0,open=0,accepted=0;
+risks.forEach(r=>{const s=(r.likelihood||1)*(r.impact||1);if(s>=15)crit++;
+if(r.status!=='closed')open++;if(r.treatment==='accept')accepted++;});
+document.getElementById('grm-total').textContent=total;
+document.getElementById('grm-crit').textContent=crit;
+document.getElementById('grm-open').textContent=open;
+document.getElementById('grm-accepted').textContent=accepted;
+document.getElementById('grc-risk-tbl').innerHTML=risks.map(r=>{
+const s=(r.likelihood||1)*(r.impact||1);
+const sc=s>=15?'b1':s>=10?'b2':s>=5?'b3':'b4';
+return`<tr><td>${esc(r.id)}</td><td>${esc(r.title)}</td><td>${esc(r.category)}</td>
+<td><span class="badge ${sc}">${r.likelihood}×${r.impact}=${s}</span></td>
+<td>${esc(r.owner)}</td><td>${esc(r.status||'open')}</td><td>${esc(r.treatment)}</td>
+<td><button class="btn-sm" onclick='showGrcRiskModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>Edit</button>
+<button class="btn-sm danger" onclick="deleteGrcRisk(${r.id})">Del</button></td></tr>`;}).join('')
+||'<tr><td colspan=8 style="color:var(--t2)">No risks</td></tr>';
+}catch(e){console.error('GRC risks:',e);}}
+
+async function saveGrcRisk(){try{await getCsrf();
+const body={title:document.getElementById('gr-title').value,description:document.getElementById('gr-desc').value,
+category:document.getElementById('gr-cat').value,likelihood:parseInt(document.getElementById('gr-like').value),
+impact:parseInt(document.getElementById('gr-impact').value),owner:document.getElementById('gr-owner').value,
+treatment:document.getElementById('gr-treat').value,treatment_plan:document.getElementById('gr-plan').value};
+const url=_editRiskId?'/api/grc/risks/'+_editRiskId:'/api/grc/risks';
+await fetch(url,{method:_editRiskId?'PUT':'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+closeModal('modal-risk');fetchGrcRisks();}catch(e){console.error(e);}}
+
+async function deleteGrcRisk(id){if(!confirm('Delete this risk?'))return;
+await getCsrf();await fetch('/api/grc/risks/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcRisks();}
+
+// ── Assets ──
+function showGrcAssetModal(a){_editAssetId=a?a.id:null;
+document.getElementById('modal-asset-title').textContent=a?'Edit Asset':'Create Asset';
+document.getElementById('ga-name').value=a?a.name:'';
+document.getElementById('ga-type').value=a?a.type:'server';
+document.getElementById('ga-owner').value=a?a.owner:'';
+document.getElementById('ga-crit').value=a?a.criticality:3;
+document.getElementById('ga-class').value=a?a.classification:'internal';
+document.getElementById('ga-loc').value=a?a.location:'';
+document.getElementById('ga-desc').value=a?a.description:'';
+document.getElementById('ga-deps').value=a?(a.dependencies||[]).join(', '):'';
+document.getElementById('modal-asset').classList.add('show');}
+
+async function fetchGrcAssets(){try{const r=await fetch('/api/grc/assets'),data=await r.json();
+const assets=data.assets||data||[];
+document.getElementById('grc-asset-tbl').innerHTML=assets.map(a=>{
+const c=parseInt(a.criticality)||1;
+const critHtml='<span class="crit-bar">'+Array.from({length:5},(_, i)=>
+'<span class="'+(i<c?'filled':'empty')+'"></span>').join('')+'</span>';
+const clsBadge=a.classification==='restricted'?'b1':a.classification==='confidential'?'b2':a.classification==='internal'?'b3':'b5';
+return`<tr><td><strong>${esc(a.name)}</strong></td><td><span class="badge b4">${esc(a.type)}</span></td>
+<td>${esc(a.owner)}</td><td>${critHtml} ${c}/5</td>
+<td><span class="badge ${clsBadge}">${esc(a.classification)}</span></td><td>${esc(a.location)}</td>
+<td><button class="btn-sm" onclick='showGrcAssetModal(${JSON.stringify(a).replace(/'/g,"&#39;")})'>Edit</button>
+<button class="btn-sm danger" onclick="deleteGrcAsset(${a.id})">Del</button></td></tr>`;}).join('')
+||'<tr><td colspan=7 style="color:var(--t2)">No assets</td></tr>';
+}catch(e){console.error('GRC assets:',e);}}
+
+async function saveGrcAsset(){try{await getCsrf();
+const body={name:document.getElementById('ga-name').value,type:document.getElementById('ga-type').value,
+owner:document.getElementById('ga-owner').value,criticality:parseInt(document.getElementById('ga-crit').value),
+classification:document.getElementById('ga-class').value,location:document.getElementById('ga-loc').value,
+description:document.getElementById('ga-desc').value,
+dependencies:document.getElementById('ga-deps').value.split(',').map(s=>s.trim()).filter(Boolean)};
+const url=_editAssetId?'/api/grc/assets/'+_editAssetId:'/api/grc/assets';
+await fetch(url,{method:_editAssetId?'PUT':'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+closeModal('modal-asset');fetchGrcAssets();}catch(e){console.error(e);}}
+
+async function deleteGrcAsset(id){if(!confirm('Delete this asset?'))return;
+await getCsrf();await fetch('/api/grc/assets/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcAssets();}
+
+// ── Evidence ──
+async function fetchGrcEvidence(){try{const r=await fetch('/api/grc/evidence'),data=await r.json();
+const evs=data.evidence||data||[];
+document.getElementById('grc-evidence-tbl').innerHTML=evs.map(e=>
+`<tr><td><strong>${esc(e.control_id)}</strong></td><td>${esc(e.filename)}</td>
+<td style="font-size:.75em">${esc(e.size||'—')}</td><td>${esc(e.uploader)}</td>
+<td style="font-size:.75em">${esc(fmtD(e.uploaded_at))}</td><td style="font-size:.8em">${esc(e.description)}</td>
+<td><a class="btn-sm" href="/api/grc/evidence/${e.id}/download" target="_blank">DL</a>
+<button class="btn-sm danger" onclick="deleteEvidence(${e.id})">Del</button></td></tr>`).join('')
+||'<tr><td colspan=7 style="color:var(--t2)">No evidence</td></tr>';
+}catch(e){console.error('GRC evidence:',e);}}
+
+async function uploadEvidence(){try{await getCsrf();
+const fd=new FormData();
+fd.append('control_id',document.getElementById('ev-control').value);
+fd.append('file',document.getElementById('ev-file').files[0]);
+fd.append('description',document.getElementById('ev-desc').value);
+await fetch('/api/grc/evidence',{method:'POST',headers:{'X-CSRF-Token':_csrfToken},body:fd});
+document.getElementById('ev-control').value='';document.getElementById('ev-desc').value='';
+document.getElementById('ev-file').value='';fetchGrcEvidence();
+}catch(e){console.error(e);}}
+
+async function deleteEvidence(id){if(!confirm('Delete this evidence?'))return;
+await getCsrf();await fetch('/api/grc/evidence/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcEvidence();}
+
+// ── History ──
+async function fetchGrcHistory(){try{const r=await fetch('/api/grc/history'),data=await r.json();
+const snapshots=data.snapshots||data||[];
+const periods=[{label:'vs M-1',months:1},{label:'vs M-3',months:3},{label:'vs M-6',months:6},{label:'vs M-12',months:12}];
+const latest=snapshots.length?snapshots[snapshots.length-1].score:0;
+let deltasHtml='';
+periods.forEach(p=>{const past=snapshots.length>p.months?snapshots[snapshots.length-1-p.months]:null;
+if(past){const d=latest-past.score;const cls=d>=0?'delta-up':'delta-down';
+const arrow=d>=0?'&#9650;':'&#9660;';
+deltasHtml+=`<span class="delta-badge ${cls}">${p.label} ${arrow} ${d>=0?'+':''}${d}</span>`;}
+else{deltasHtml+=`<span class="delta-badge" style="background:var(--s2);color:var(--t2)">${p.label} —</span>`;}});
+document.getElementById('grc-hist-deltas').innerHTML=deltasHtml;
+const maxScore=Math.max(1,...snapshots.map(s=>s.score||0));
+document.getElementById('grc-hist-chart').innerHTML=snapshots.slice(-24).map(s=>{
+const h=Math.round(((s.score||0)/maxScore)*140);
+const c=(s.score||0)>=80?'var(--grn)':(s.score||0)>=50?'var(--ylw)':'var(--red)';
+return`<div class="hist-bar" style="height:${h}px;background:${c}"><span>${esc(s.label||s.date||'')}</span></div>`;}).join('')
+||'<span style="color:var(--t2);padding:20px">No snapshots yet</span>';
+}catch(e){console.error('GRC history:',e);}}
+
+async function takeSnapshot(){try{await getCsrf();
+const res=document.getElementById('grc-snap-result');res.textContent='Creating...';res.style.color='var(--ylw)';
+const r=await fetch('/api/grc/history/snapshot',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});
+const d=await r.json();res.textContent=d.ok?'Snapshot created':'Error';
+res.style.color=d.ok?'var(--grn)':'var(--red)';fetchGrcHistory();
+}catch(e){document.getElementById('grc-snap-result').textContent='Error';}}
+
+// ── Policies ──
+function showGrcPolicyModal(p){_editPolicyId=p?p.id:null;
+document.getElementById('modal-policy-title').textContent=p?'Edit Policy':'Create Policy';
+document.getElementById('gp-title').value=p?p.title:'';
+document.getElementById('gp-content').value=p?p.content:'';
+document.getElementById('gp-version').value=p?p.version:'1.0';
+document.getElementById('gp-author').value=p?p.author:'';
+document.getElementById('modal-policy').classList.add('show');}
+
+async function fetchGrcPolicies(){try{const r=await fetch('/api/grc/policies'),data=await r.json();
+const pols=data.policies||data||[];
+document.getElementById('grc-policy-tbl').innerHTML=pols.map(p=>{
+const stBadge=p.status==='approved'?'b4':p.status==='draft'?'b5':'b2';
+return`<tr><td><strong>${esc(p.title)}</strong></td><td>${esc(p.version)}</td>
+<td><span class="badge ${stBadge}">${esc(p.status||'draft')}</span></td>
+<td>${esc(p.author)}</td><td>${esc(p.approver||'—')}</td>
+<td style="font-size:.75em">${esc(p.next_review||'—')}</td>
+<td>${p.ack_count||0}</td>
+<td><button class="btn-sm" onclick="ackPolicy(${p.id})">Ack</button>
+<button class="btn-sm" onclick='showGrcPolicyModal(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Edit</button>
+<button class="btn-sm danger" onclick="deleteGrcPolicy(${p.id})">Del</button></td></tr>`;}).join('')
+||'<tr><td colspan=8 style="color:var(--t2)">No policies</td></tr>';
+}catch(e){console.error('GRC policies:',e);}}
+
+async function saveGrcPolicy(){try{await getCsrf();
+const body={title:document.getElementById('gp-title').value,content:document.getElementById('gp-content').value,
+version:document.getElementById('gp-version').value,author:document.getElementById('gp-author').value};
+const url=_editPolicyId?'/api/grc/policies/'+_editPolicyId:'/api/grc/policies';
+await fetch(url,{method:_editPolicyId?'PUT':'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+closeModal('modal-policy');fetchGrcPolicies();}catch(e){console.error(e);}}
+
+async function deleteGrcPolicy(id){if(!confirm('Delete this policy?'))return;
+await getCsrf();await fetch('/api/grc/policies/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcPolicies();}
+
+async function ackPolicy(id){try{await getCsrf();
+await fetch('/api/grc/policies/'+id+'/ack',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcPolicies();
+}catch(e){console.error(e);}}
+
+// ── Audits ──
+function showGrcAuditModal(a){_editAuditId=a?a.id:null;
+document.getElementById('modal-audit-title').textContent=a?'Edit Audit':'Create Audit';
+document.getElementById('gau-title').value=a?a.title:'';
+document.getElementById('gau-scope').value=a?a.scope:'';
+document.getElementById('gau-auditor').value=a?a.auditor:'';
+document.getElementById('gau-date').value=a?a.scheduled_date:'';
+document.getElementById('gau-status').value=a?a.status:'planned';
+document.getElementById('modal-audit').classList.add('show');}
+
+async function fetchGrcAudits(){try{const r=await fetch('/api/grc/audits'),data=await r.json();
+const audits=data.audits||data||[];
+document.getElementById('grc-audit-tbl').innerHTML=audits.map(a=>{
+const stBadge=a.status==='completed'?'b4':a.status==='in_progress'?'b2':'b5';
+const fc=a.findings_count||0;
+return`<tr><td><strong>${esc(a.title)}</strong></td><td>${esc(a.scope)}</td><td>${esc(a.auditor)}</td>
+<td style="font-size:.75em">${esc(a.scheduled_date||'—')}</td>
+<td><span class="badge ${stBadge}">${esc(a.status)}</span></td><td>${fc}</td>
+<td><button class="btn-sm" onclick="toggleFindings(${a.id},this)">Findings</button>
+<button class="btn-sm" onclick="showFindingModal(${a.id})">+ Finding</button>
+<button class="btn-sm" onclick='showGrcAuditModal(${JSON.stringify(a).replace(/'/g,"&#39;")})'>Edit</button>
+<button class="btn-sm danger" onclick="deleteGrcAudit(${a.id})">Del</button></td></tr>
+<tr class="finding-row" id="findings-${a.id}" style="display:none"><td colspan=7>
+<div id="findings-list-${a.id}" style="padding:8px;font-size:.85em">Loading...</div></td></tr>`;}).join('')
+||'<tr><td colspan=7 style="color:var(--t2)">No audits</td></tr>';
+}catch(e){console.error('GRC audits:',e);}}
+
+async function saveGrcAudit(){try{await getCsrf();
+const body={title:document.getElementById('gau-title').value,scope:document.getElementById('gau-scope').value,
+auditor:document.getElementById('gau-auditor').value,scheduled_date:document.getElementById('gau-date').value,
+status:document.getElementById('gau-status').value};
+const url=_editAuditId?'/api/grc/audits/'+_editAuditId:'/api/grc/audits';
+await fetch(url,{method:_editAuditId?'PUT':'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+closeModal('modal-audit');fetchGrcAudits();}catch(e){console.error(e);}}
+
+async function deleteGrcAudit(id){if(!confirm('Delete this audit?'))return;
+await getCsrf();await fetch('/api/grc/audits/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcAudits();}
+
+async function toggleFindings(auditId,btn){
+const row=document.getElementById('findings-'+auditId);
+if(row.style.display==='none'){row.style.display='';fetchGrcFindings(auditId);}
+else{row.style.display='none';}}
+
+async function fetchGrcFindings(auditId){try{const r=await fetch('/api/grc/audits/'+auditId+'/findings'),data=await r.json();
+const findings=data.findings||data||[];
+document.getElementById('findings-list-'+auditId).innerHTML=findings.map(f=>{
+const sc=f.severity==='critical'?'b1':f.severity==='high'?'b2':f.severity==='medium'?'b3':'b4';
+return`<div style="padding:4px 0;border-bottom:1px solid var(--brd)">
+<span class="badge ${sc}">${esc(f.severity)}</span> <strong>${esc(f.title)}</strong>
+<span style="color:var(--t2);font-size:.85em;margin-left:8px">${esc(f.description||'')}</span>
+<button class="btn-sm danger" style="float:right" onclick="deleteGrcFinding(${f.id},${auditId})">Del</button></div>`;}).join('')
+||'<span style="color:var(--t2)">No findings</span>';
+}catch(e){console.error(e);}}
+
+function showFindingModal(auditId){
+document.getElementById('gf-audit-id').value=auditId;
+document.getElementById('gf-title').value='';document.getElementById('gf-desc').value='';
+document.getElementById('gf-rec').value='';document.getElementById('gf-sev').value='medium';
+document.getElementById('modal-finding').classList.add('show');}
+
+async function saveGrcFinding(){try{await getCsrf();
+const auditId=document.getElementById('gf-audit-id').value;
+const body={title:document.getElementById('gf-title').value,severity:document.getElementById('gf-sev').value,
+description:document.getElementById('gf-desc').value,recommendation:document.getElementById('gf-rec').value};
+await fetch('/api/grc/audits/'+auditId+'/findings',{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+closeModal('modal-finding');fetchGrcFindings(parseInt(auditId));}catch(e){console.error(e);}}
+
+async function deleteGrcFinding(id,auditId){if(!confirm('Delete this finding?'))return;
+await getCsrf();await fetch('/api/grc/findings/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcFindings(auditId);}
+
+// ── Vendors ──
+function showGrcVendorModal(v){_editVendorId=v?v.id:null;
+document.getElementById('modal-vendor-title').textContent=v?'Edit Vendor':'Create Vendor';
+document.getElementById('gv-name').value=v?v.name:'';
+document.getElementById('gv-service').value=v?v.service:'';
+document.getElementById('gv-crit').value=v?v.criticality:3;
+document.getElementById('gv-contact').value=v?v.contact:'';
+document.getElementById('gv-notes').value=v?v.notes:'';
+document.getElementById('modal-vendor').classList.add('show');}
+
+async function fetchGrcVendors(){try{const r=await fetch('/api/grc/vendors'),data=await r.json();
+const vendors=data.vendors||data||[];
+document.getElementById('grc-vendor-tbl').innerHTML=vendors.map(v=>{
+const rs=v.risk_score||0;
+const rlBadge=rs>=75?'b1':rs>=50?'b2':rs>=25?'b3':'b4';
+const rlLabel=rs>=75?'Critical':rs>=50?'High':rs>=25?'Medium':'Low';
+const pc=rs>=75?'var(--red)':rs>=50?'var(--org)':rs>=25?'var(--ylw)':'var(--grn)';
+return`<tr><td><strong>${esc(v.name)}</strong></td><td>${esc(v.service)}</td><td>${v.criticality}/5</td>
+<td><span class="progress-sm"><span class="fill" style="width:${rs}%;background:${pc}"></span></span> ${rs}%</td>
+<td><span class="badge ${rlBadge}">${rlLabel}</span></td>
+<td style="font-size:.75em">${esc(fmtD(v.last_assessed))}</td>
+<td><button class="btn-sm" onclick="fetchVendorQuestionnaire(${v.id},'${esc(v.name)}')">Questionnaire</button>
+<button class="btn-sm" onclick='showGrcVendorModal(${JSON.stringify(v).replace(/'/g,"&#39;")})'>Edit</button>
+<button class="btn-sm danger" onclick="deleteGrcVendor(${v.id})">Del</button></td></tr>`;}).join('')
+||'<tr><td colspan=7 style="color:var(--t2)">No vendors</td></tr>';
+}catch(e){console.error('GRC vendors:',e);}}
+
+async function saveGrcVendor(){try{await getCsrf();
+const body={name:document.getElementById('gv-name').value,service:document.getElementById('gv-service').value,
+criticality:parseInt(document.getElementById('gv-crit').value),contact:document.getElementById('gv-contact').value,
+notes:document.getElementById('gv-notes').value};
+const url=_editVendorId?'/api/grc/vendors/'+_editVendorId:'/api/grc/vendors';
+await fetch(url,{method:_editVendorId?'PUT':'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+closeModal('modal-vendor');fetchGrcVendors();}catch(e){console.error(e);}}
+
+async function deleteGrcVendor(id){if(!confirm('Delete this vendor?'))return;
+await getCsrf();await fetch('/api/grc/vendors/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchGrcVendors();}
+
+async function fetchVendorQuestionnaire(vendorId,name){_currentVendorId=vendorId;
+document.getElementById('grc-vendor-q-name').textContent=name||'';
+document.getElementById('grc-vendor-q-panel').style.display='';
+try{const r=await fetch('/api/grc/vendors/'+vendorId+'/questionnaire'),data=await r.json();
+const qs=data.questions||data||[];
+document.getElementById('grc-vendor-q-list').innerHTML=qs.map((q,i)=>
+`<div class="vendor-q-item"><div class="q-text"><strong>${i+1}.</strong> ${esc(q.question)}</div>
+<select data-qi="${i}">
+<option value="unanswered" ${(!q.answer||q.answer==='unanswered')?'selected':''}>— Select —</option>
+<option value="yes" ${q.answer==='yes'?'selected':''}>Yes</option>
+<option value="no" ${q.answer==='no'?'selected':''}>No</option>
+<option value="partial" ${q.answer==='partial'?'selected':''}>Partial</option>
+</select></div>`).join('')||'<span style="color:var(--t2)">No questionnaire configured</span>';
+}catch(e){console.error(e);}}
+
+async function saveVendorAnswers(){if(!_currentVendorId)return;
+try{await getCsrf();
+const answers=[];document.querySelectorAll('#grc-vendor-q-list select').forEach(s=>{
+answers.push({index:parseInt(s.dataset.qi),answer:s.value});});
+await fetch('/api/grc/vendors/'+_currentVendorId+'/questionnaire',{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify({answers})});
+fetchGrcVendors();}catch(e){console.error(e);}}
+
+if(!IS_ADMIN) { /* end of script for non-admin users */ }
+
+// ═══ ADMIN FUNCTIONS ═══
+async function fetchAdminDefense(){
+try{
+// Services
+const sr=await fetch('/api/admin/services'),svcs=await sr.json();
+document.getElementById('a-services').innerHTML=svcs.map(s=>
+`<div style="margin:4px 0"><span class="svc-dot ${s.active===true?'svc-up':s.active===false?'svc-down':'svc-unknown'}"></span>${esc(s.name)} — ${s.active===true?'active':s.active===false?'inactive':'unknown'}</div>`).join('');
+// Defense stats
+const dr=await fetch('/api/defense'),dd=await dr.json();
+if(dd.stats){document.getElementById('a-defense-stats').innerHTML=
+`<div style="font-size:.8em">Total blocked: <strong>${dd.stats.total_blocked||0}</strong><br>Active actions: <strong>${dd.stats.active_actions||0}</strong></div>`;}
+// Iptables
+fetchIptables();
+// Snapshots
+const snr=await fetch('/api/snapshots'),snaps=await snr.json();
+document.getElementById('a-snapshots').innerHTML=snaps.map(s=>
+`<tr><td>${esc(s.incident_id)}</td><td>${esc(s.created_at)}</td><td>${esc(s.reason)}</td>
+<td>${s.size_kb} KB</td>
+<td><button class="btn-sm danger" onclick="adminRollback('${esc(s.filepath)}')">Rollback</button></td></tr>`).join('')
+||'<tr><td colspan=5 style="color:var(--t2)">No snapshots</td></tr>';
+}catch(e){console.error(e);}
+}
+
+async function fetchIptables(){
+try{const r=await fetch('/api/admin/iptables'),d=await r.json();
+document.getElementById('a-iptables').textContent=d.rules||'No CGS chain rules.';}catch(e){}}
+
+async function adminRollback(fp){
+if(!confirm('Rollback to this snapshot? All blocks since then will be removed.'))return;
+await getCsrf();await fetch('/api/snapshots/rollback',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},
+body:JSON.stringify({filepath:fp})});fetchAdminDefense();}
+
+async function adminRestart(){
+if(!confirm('Restart CGS service?'))return;
+await getCsrf();const r=await fetch('/api/admin/restart',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});
+const d=await r.json();alert(d.ok?'Service restart initiated':'Error: '+(d.error||'unknown'));}
+
+// ═══ CONFIG ═══
+async function fetchAdminConfig(){
+try{
+const rr=await fetch('/api/admin/config/report-options'),ro=await rr.json();
+document.getElementById('a-report-opts').innerHTML=`
+<div style="font-size:.8em;margin-bottom:8px">Country: <strong>${esc(ro.country_flag||'')} ${esc(ro.country_name||ro.country)}</strong>
+ | Legal info: <strong>${ro.include_legal_info?'Yes':'No'}</strong>
+ | Forensic attached: <strong>${ro.attach_forensic_file?'Yes':'No'}</strong></div>`;
+// Backups
+const br=await fetch('/api/backup/list'),bl=await br.json();
+document.getElementById('a-backups').innerHTML=(bl||[]).map(b=>
+`<tr><td style="font-size:.75em">${esc(typeof b==='string'?b:b.name||b)}</td><td></td></tr>`).join('')
+||'<tr><td colspan=2 style="color:var(--t2)">No backups</td></tr>';
+}catch(e){}}
+
+async function adminTestEmail(){
+const to=document.getElementById('a-email-to').value;
+const res=document.getElementById('a-email-result');
+res.textContent='Sending...';res.style.color='var(--ylw)';
+try{await getCsrf();const r=await fetch('/api/admin/test-email',{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},
+body:JSON.stringify({to:to})});
+const d=await r.json();
+res.textContent=d.ok?'Sent to '+esc(d.to):'Error: '+esc(d.error);
+res.style.color=d.ok?'var(--grn)':'var(--red)';
+}catch(e){res.textContent='Error';res.style.color='var(--red)';}}
+
+async function adminBackup(){
+const res=document.getElementById('a-backup-result');
+res.textContent='Creating...';
+try{await getCsrf();const r=await fetch('/api/backup',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});
+const d=await r.json();res.textContent=d.ok?'Created':'Error';fetchAdminConfig();
+}catch(e){res.textContent='Error';}}
+
+async function adminCheck(type){
+const el=document.getElementById('a-check-result');
+el.textContent='Checking...';
+const urls={integrity:'/api/integrity',firewall:'/api/firewall/verify',ssh:'/api/ssh/verify',os:'/api/os/verify'};
+try{const r=await fetch(urls[type]),d=await r.json();
+el.textContent=JSON.stringify(d,null,2);}catch(e){el.textContent='Error: '+e;}}
+
+// ═══ ADMIN EMAIL ═══
+async function fetchAdminEmail(){
+try{const r=await fetch('/api/admin/config'),d=await r.json();
+const e=d.email||{};
+document.getElementById('ae-smtp-server').value=e.smtp_server||'';
+document.getElementById('ae-smtp-port').value=e.smtp_port||587;
+document.getElementById('ae-smtp-user').value=e.smtp_user||'';
+document.getElementById('ae-from').value=e.from_address||'';
+document.getElementById('ae-admin-emails').value=(e.admin_emails||[]).join(', ');
+document.getElementById('ae-contact').value=e.security_contact||'';
+document.getElementById('ae-approval-timeout').value=e.approval_timeout_minutes||15;
+document.getElementById('ae-max-wait').value=e.shutdown_max_wait_minutes||30;
+}catch(e){}}
+
+async function saveAdminEmail(){
+const res=document.getElementById('ae-save-result');
+res.textContent='Saving...';res.style.color='var(--ylw)';
+try{await getCsrf();
+const body={email:{
+smtp_server:document.getElementById('ae-smtp-server').value,
+smtp_port:parseInt(document.getElementById('ae-smtp-port').value)||587,
+smtp_user:document.getElementById('ae-smtp-user').value,
+from_address:document.getElementById('ae-from').value,
+admin_emails:document.getElementById('ae-admin-emails').value.split(',').map(s=>s.trim()).filter(Boolean),
+security_contact:document.getElementById('ae-contact').value,
+approval_timeout_minutes:parseInt(document.getElementById('ae-approval-timeout').value)||15,
+shutdown_max_wait_minutes:parseInt(document.getElementById('ae-max-wait').value)||30,
+}};
+const r=await fetch('/api/admin/config',{method:'PUT',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+const d=await r.json();
+res.textContent=d.ok?'Saved':'Error';res.style.color=d.ok?'var(--grn)':'var(--red)';
+}catch(e){res.textContent='Error';res.style.color='var(--red)';}}
+
+// ═══ USER EMAIL ═══
+async function fetchUserEmail(){
+try{
+const r=await fetch('/api/admin/users'),users=await r.json();
+const linked=users.filter(u=>u.role!=='admin');
+document.getElementById('ue-users-tbl').innerHTML=linked.map(u=>
+`<tr><td><strong>${esc(u.username)}</strong></td><td>${esc(u.email||'')}</td>
+<td>${esc(u.ip||'')}</td><td style="font-size:.75em">${esc(u.mac||'')}</td>
+<td>${esc(u.hostname||'')}</td>
+<td>${u.must_change_password?'<span style="color:var(--org)">Pending</span>':'<span style="color:var(--grn)">Yes</span>'}</td>
+<td><button class="btn-sm danger" onclick="deleteUserDevice(${u.id})">Del</button></td></tr>`).join('')
+||'<tr><td colspan=7 style="color:var(--t2)">No users</td></tr>';
+const cr=await fetch('/api/admin/config'),cd=await cr.json();
+document.getElementById('ue-invite-delay').value=(cd.email||{}).invite_delay_minutes||60;
+}catch(e){}}
+
+async function saveUserEmail(){
+const res=document.getElementById('ue-result');
+res.textContent='Saving...';res.style.color='var(--ylw)';
+try{await getCsrf();
+const body={email:{invite_delay_minutes:parseInt(document.getElementById('ue-invite-delay').value)||60}};
+const r=await fetch('/api/admin/config',{method:'PUT',headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+const d=await r.json();
+res.textContent=d.ok?'Saved':'Error';res.style.color=d.ok?'var(--grn)':'var(--red)';
+}catch(e){res.textContent='Error';res.style.color='var(--red)';}}
+
+async function resendInvites(){
+const res=document.getElementById('ue-result');
+res.textContent='Sending...';res.style.color='var(--ylw)';
+try{await getCsrf();
+const r=await fetch('/api/admin/resend-invites',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});
+const d=await r.json();
+res.textContent=d.ok?'Sent to '+d.count+' user(s)':'Error: '+(d.error||'unknown');
+res.style.color=d.ok?'var(--grn)':'var(--red)';
+}catch(e){res.textContent='Error';res.style.color='var(--red)';}}
+
+function showAddUserDevice(){
+document.getElementById('modal-user-device').classList.add('show');
+['ud-username','ud-email','ud-ip','ud-mac','ud-hostname'].forEach(id=>document.getElementById(id).value='');
+document.getElementById('ud-result').textContent='';
+}
+
+async function saveUserDevice(){
+const res=document.getElementById('ud-result');
+const username=document.getElementById('ud-username').value.trim();
+const email=document.getElementById('ud-email').value.trim();
+if(!username||username.length<2){res.textContent='Username required (min 2 chars)';res.style.color='var(--red)';return;}
+res.textContent='Creating...';res.style.color='var(--ylw)';
+try{await getCsrf();
+const r=await fetch('/api/admin/users/device',{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},
+body:JSON.stringify({username:username,email:email,
+ip:document.getElementById('ud-ip').value.trim(),
+mac:document.getElementById('ud-mac').value.trim(),
+hostname:document.getElementById('ud-hostname').value.trim()})});
+const d=await r.json();
+if(d.ok){closeModal('modal-user-device');fetchUserEmail();}
+else{res.textContent=d.e||'Error';res.style.color='var(--red)';}
+}catch(e){res.textContent='Error';res.style.color='var(--red)';}}
+
+async function deleteUserDevice(id){
+if(!confirm('Delete this user account?'))return;
+try{await getCsrf();
+await fetch('/api/admin/users/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});
+fetchUserEmail();}catch(e){}}
+
+async function scanForNewDevices(){
+const st=document.getElementById('ue-scan-status');
+st.textContent='Scanning...';
+try{await getCsrf();
+const r=await fetch('/api/admin/directory/scan',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});
+const d=await r.json();
+const hosts=(d.hosts||[]).filter(h=>!h.role);
+st.textContent=hosts.length+' device(s) found';
+if(hosts.length){
+const h=hosts[0];
+document.getElementById('ud-ip').value=h.ip||'';
+document.getElementById('ud-mac').value=h.mac||'';
+document.getElementById('ud-hostname').value=h.hostname||'';
+document.getElementById('ud-username').value='';
+document.getElementById('ud-email').value='';
+document.getElementById('ud-result').textContent=hosts.length>1?hosts.length+' devices found, showing first':'';
+document.getElementById('modal-user-device').classList.add('show');
+}}catch(e){st.textContent='Error';}}
+
+// ═══ LOGS ═══
+async function adminLog(type){
+const el=document.getElementById('a-log-content');
+el.textContent='Loading...';
+if(type==='forensics'){
+try{const r=await fetch('/api/admin/logs/forensics'),d=await r.json();
+el.textContent=(d.files||[]).map(f=>f.name+'  ('+f.size_kb+' KB)').join('\n')||'No forensic files.';}catch(e){el.textContent='Error';}
+return;}
+try{const r=await fetch('/api/admin/logs/'+type+'?lines=80'),d=await r.json();
+el.textContent=d.content||'(empty)';}catch(e){el.textContent='Error: '+e;}}
+
+// ═══ USERS ═══
+async function fetchAdminUsers(){
+try{const r=await fetch('/api/admin/users'),data=await r.json();
+document.getElementById('a-users-tbl').innerHTML=data.map(u=>
+`<tr><td><strong>${esc(u.username)}</strong></td>
+<td style="font-size:.8em">${esc(u.email||'')}</td>
+<td style="font-size:.8em">${esc(u.ip||'')}</td>
+<td><span class="badge ${u.role==='admin'?'b2':'b4'}">${esc(u.role)}</span></td>
+<td>${u.active?'<span style="color:var(--grn)">Yes</span>':'<span style="color:var(--red)">No</span>'}</td>
+<td>${u.has_totp?'✓':'—'}</td>
+<td style="font-size:.75em">${esc(fmtD(u.created_at))}</td>
+<td style="font-size:.75em">${esc(fmtD(u.last_login))}</td>
+<td><button class="btn-sm" onclick="editUser(${u.id},'${esc(u.username)}','${esc(u.role)}','${esc(u.company||'')}')">Edit</button>
+<button class="btn-sm danger" onclick="delUser(${u.id},'${esc(u.username)}')">Del</button></td></tr>`).join('');}catch(e){}}
+
+function muShowTab(mode){
+document.getElementById('mu-panel-admin').style.display=mode==='admin'?'':'none';
+document.getElementById('mu-panel-user').style.display=mode==='user'?'':'none';
+document.getElementById('mu-tab-admin').style.borderColor=mode==='admin'?'var(--grn)':'var(--brd)';
+document.getElementById('mu-tab-admin').style.color=mode==='admin'?'var(--grn)':'var(--t2)';
+document.getElementById('mu-tab-user').style.borderColor=mode==='user'?'var(--grn)':'var(--brd)';
+document.getElementById('mu-tab-user').style.color=mode==='user'?'var(--grn)':'var(--t2)';
+document.getElementById('mu-error').textContent='';
+document.getElementById('modal-user-title').textContent=mode==='admin'?'Create Admin':'Create Users';
+if(mode==='user')muScanNetwork();
+}
+
+async function muScanNetwork(){
+const st=document.getElementById('mu-scan-status');
+st.textContent='Scanning...';
+try{await getCsrf();
+const r=await fetch('/api/admin/directory/scan',{method:'POST',headers:{'X-CSRF-Token':_csrfToken}});
+const d=await r.json();
+const hosts=(d.hosts||[]).filter(h=>!h.role);
+const ur=await fetch('/api/admin/users'),users=await ur.json();
+// Only consider a machine assigned if a user with a non-empty username has that IP
+const assignedIPs=new Set(users.filter(u=>u.ip&&u.username&&u.username.trim().length>0).map(u=>u.ip));
+const unassigned=hosts.filter(h=>!assignedIPs.has(h.ip));
+st.textContent=unassigned.length+' unassigned device(s)';
+const c=document.getElementById('mu-scan-results');
+if(!unassigned.length){c.innerHTML='<div style="color:var(--t2);font-size:.8em;padding:8px">All devices have users assigned.</div>';c.dataset.count=0;return;}
+c.innerHTML=unassigned.map((h,i)=>`<div style="padding:8px;border-bottom:1px solid var(--brd)">
+<strong>${esc(h.ip)}</strong> <span style="font-size:.8em;color:var(--t2)">${esc(h.mac||'')} ${esc(h.vendor||'')} ${esc(h.hostname||'')}</span>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+<input placeholder="Username" id="mu-sname-${i}" style="font-size:.85em;padding:6px 8px;background:var(--s2);border:1px solid var(--brd);color:var(--grn);font-family:inherit;border-radius:2px">
+<input placeholder="Email" id="mu-semail-${i}" style="font-size:.85em;padding:6px 8px;background:var(--s2);border:1px solid var(--brd);color:var(--grn);font-family:inherit;border-radius:2px">
+</div>
+<input type="hidden" id="mu-sip-${i}" value="${esc(h.ip)}">
+<input type="hidden" id="mu-smac-${i}" value="${esc(h.mac||'')}">
+<input type="hidden" id="mu-shost-${i}" value="${esc(h.hostname||'')}">
+</div>`).join('');
+c.dataset.count=unassigned.length;
+}catch(e){st.textContent='Error';}}
+
+async function muSaveUsers(){
+const c=document.getElementById('mu-scan-results');
+const count=parseInt(c.dataset.count||'0');
+const err=document.getElementById('mu-error');
+if(!count){err.textContent='Scan the network first';err.style.color='var(--red)';return;}
+err.textContent='Creating...';err.style.color='var(--ylw)';
+let created=0;
+await getCsrf();
+for(let i=0;i<count;i++){
+const name=document.getElementById('mu-sname-'+i).value.trim();
+if(!name||name.length<2)continue;
+const body={username:name,email:document.getElementById('mu-semail-'+i).value.trim(),
+ip:document.getElementById('mu-sip-'+i).value,mac:document.getElementById('mu-smac-'+i).value,
+hostname:document.getElementById('mu-shost-'+i).value};
+try{const r=await fetch('/api/admin/users/device',{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+const d=await r.json();if(d.ok)created++;}catch(e){}}
+if(created){err.textContent=created+' account(s) created';err.style.color='var(--grn)';
+closeModal('modal-user');fetchAdminUsers();}
+else{err.textContent='Fill in at least one username';err.style.color='var(--red)';}}
+
+function showCreateUser(){editUserId=null;
+document.getElementById('mu-username').value='';document.getElementById('mu-email').value='';
+document.getElementById('mu-password').value='';
+document.getElementById('mu-company').value='';document.getElementById('mu-role').value='admin';
+document.getElementById('mu-error').textContent='';
+document.getElementById('mu-scan-results').innerHTML='';
+document.getElementById('mu-scan-status').textContent='';
+document.getElementById('mu-username').removeAttribute('readonly');
+muShowTab('admin');
+document.getElementById('modal-user').classList.add('show');}
+
+function editUser(id,username,role,company){editUserId=id;
+document.getElementById('modal-user-title').textContent='Edit User: '+username;
+document.getElementById('mu-username').value=username;document.getElementById('mu-username').setAttribute('readonly','');
+document.getElementById('mu-password').value='';
+document.getElementById('mu-company').value=company||'';
+document.getElementById('mu-role').value=role;document.getElementById('mu-error').textContent='';
+document.getElementById('modal-user').classList.add('show');}
+
+async function saveUser(){
+const err=document.getElementById('mu-error');err.textContent='';
+const body={username:document.getElementById('mu-username').value,
+role:document.getElementById('mu-role').value,
+email:document.getElementById('mu-email').value,
+company:document.getElementById('mu-company').value};
+const pw=document.getElementById('mu-password').value;
+if(pw)body.password=pw;
+if(!editUserId&&!pw){err.textContent='Password required';return;}
+try{
+await getCsrf();
+let r;
+if(editUserId){r=await fetch('/api/admin/users/'+editUserId,{method:'PUT',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});
+}else{r=await fetch('/api/admin/users',{method:'POST',
+headers:{'Content-Type':'application/json','X-CSRF-Token':_csrfToken},body:JSON.stringify(body)});}
+const d=await r.json();
+if(d.ok){closeModal('modal-user');await getCsrf();fetchAdminUsers();}else{err.textContent=d.e||'Error (status '+r.status+')';}
+}catch(e){err.textContent='Error: '+e;}}
+
+async function delUser(id,username){
+if(!confirm('Delete user "'+username+'"?'))return;
+await getCsrf();await fetch('/api/admin/users/'+id,{method:'DELETE',headers:{'X-CSRF-Token':_csrfToken}});fetchAdminUsers();}
+
+async function globalSearch(){
+const q=document.getElementById('global-search').value.trim();
+if(q.length<2)return;
+try{
+const r=await fetch('/api/search?q='+encodeURIComponent(q));
+const d=await r.json();
+const container=document.getElementById('search-results');
+document.getElementById('search-count').textContent='('+d.total+' results for "'+esc(d.query)+'")';
+let html='';
+const typeLabels={alerts:'Alerts',hosts:'Hosts',risks:'Risks',assets:'Assets',policies:'Policies',vendors:'Vendors'};
+const typeColors={alerts:'var(--red)',hosts:'var(--blu)',risks:'var(--org)',assets:'var(--grn)',policies:'var(--ylw)',vendors:'var(--t2)'};
+for(const[type,items]of Object.entries(d.results||{})){
+if(!items||!items.length)continue;
+html+='<div style="margin-top:12px"><div style="color:'+typeColors[type]+';font-size:.7em;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">'+typeLabels[type]+' ('+items.length+')</div>';
+for(const item of items){
+html+='<div style="padding:4px 8px;border-left:2px solid '+typeColors[type]+';margin-bottom:2px;background:rgba(255,255,255,.02);font-size:.82em">';
+html+='<strong>'+esc(item.title)+'</strong>';
+if(item.detail)html+=' <span style="color:var(--t2);font-size:.85em">'+esc(item.detail)+'</span>';
+html+='</div>';
+}
+html+='</div>';
+}
+if(!d.total)html='<div style="color:var(--t2);padding:20px;text-align:center">No results found.</div>';
+container.innerHTML=html;
+document.getElementById('modal-search').classList.add('show');
+}catch(e){console.error('Search error:',e);}}
+
+async function importCsv(type){
+const fileInput=document.getElementById('import-'+type+'-file');
+const file=fileInput.files[0];
+if(!file)return;
+try{
+await getCsrf();
+const fd=new FormData();
+fd.append('file',file);
+const r=await fetch('/api/grc/'+type+'/import',{method:'POST',headers:{'X-CSRF-Token':_csrfToken},body:fd});
+const d=await r.json();
+if(d.ok){
+alert('Imported: '+d.imported+', Skipped: '+d.skipped+(d.errors&&d.errors.length?'\n\nErrors:\n'+d.errors.join('\n'):''));
+if(type==='risks')fetchGrcRisks();
+else if(type==='assets')fetchGrcAssets();
+else if(type==='vendors')fetchGrcVendors();
+}else{alert('Error: '+(d.e||'Unknown error'));}
+}catch(e){alert('Import error: '+e);}
+fileInput.value='';}
+</script>
+</body>
+</html>

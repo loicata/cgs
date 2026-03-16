@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+coverage.xml
+htmlcov/
+.coverage
+
+# CGS runtime data (never commit)
+*.db
+*.db-journal
+*.db-wal
+*.log
+*.jsonl
+data/
+/var/
+
+# Secrets (never commit)
+.env
+.vault_salt
+*.pem
+*.key
+*.crt
+
+# Backups
+*.backup_*
+
+# Bandit reports
+bandit-report.json

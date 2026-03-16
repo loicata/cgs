@@ -1,0 +1,16 @@
+Package: cgs
+Version: 2.2.3-1
+Section: net
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.9), python3-venv, python3-dev, libpcap-dev, iptables, tcpdump
+Recommends: nmap, whois, traceroute, nftables, net-tools, openssl
+Suggests: suricata, rsyslog
+Maintainer: CGS <cgs@localhost>
+Installed-Size: 720
+Description: Autonomous active network defense server
+ CGS monitors the network, receives Suricata alerts
+ and responds after admin confirmation. Attacker recon, forensics.
+ .
+ Compatible: Ubuntu 24+, Debian 13+, and any Debian-based system
+ (Mint, Kali, Proxmox, Raspberry Pi OS, etc.) in compatibility mode.

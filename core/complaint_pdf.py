@@ -1,0 +1,285 @@
+"""
+CGS — PDF complaint generator (multi-pays).
+
+Produces a country-adapted PDF complaint document (IE, FR, US)
+with appropriate contacts, legislation, and forms.
+"""
+
+import logging
+import os
+from datetime import datetime
+
+from reportlab.lib.pagesizes import A4, LETTER
+from reportlab.lib.units import mm
+from reportlab.lib.colors import HexColor, black, white
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, PageBreak,
+)
+
+from core.legal_data import get_country
+
+logger = logging.getLogger("cgs.complaint")
+
+DARK = HexColor("#1F2937")
+BLUE = HexColor("#1E40AF")
+GRAY = HexColor("#6B7280")
+BORDER = HexColor("#E2E8F0")
+
+
+def _styles():
+    base = getSampleStyleSheet()
+    s = {}
+    s["title"] = ParagraphStyle("T", parent=base["Title"], fontSize=18, textColor=DARK,
+                                 spaceAfter=4*mm, alignment=TA_CENTER, fontName="Helvetica-Bold")
+    s["subtitle"] = ParagraphStyle("ST", parent=base["Normal"], fontSize=11, textColor=GRAY,
+                                    alignment=TA_CENTER, spaceAfter=8*mm)
+    s["heading"] = ParagraphStyle("H", parent=base["Heading2"], fontSize=13, textColor=BLUE,
+                                   spaceBefore=6*mm, spaceAfter=3*mm, fontName="Helvetica-Bold")
+    s["subheading"] = ParagraphStyle("SH", parent=base["Heading3"], fontSize=11, textColor=DARK,
+                                      spaceBefore=4*mm, spaceAfter=2*mm, fontName="Helvetica-Bold")
+    s["body"] = ParagraphStyle("B", parent=base["Normal"], fontSize=10, textColor=DARK,
+                                leading=14, alignment=TA_JUSTIFY, spaceAfter=2*mm)
+    s["small"] = ParagraphStyle("SM", parent=base["Normal"], fontSize=8, textColor=GRAY, leading=10)
+    s["label"] = ParagraphStyle("L", parent=base["Normal"], fontSize=9, textColor=GRAY)
+    s["value"] = ParagraphStyle("V", parent=base["Normal"], fontSize=10, textColor=DARK,
+                                 fontName="Helvetica-Bold")
+    s["mono"] = ParagraphStyle("M", parent=base["Normal"], fontSize=9, textColor=DARK,
+                                fontName="Courier", leading=11)
+    s["legal"] = ParagraphStyle("LG", parent=base["Normal"], fontSize=9, textColor=DARK,
+                                 leading=13, alignment=TA_JUSTIFY, spaceBefore=2*mm, spaceAfter=2*mm)
+    return s
+
+
+def _info_table(data, styles):
+    rows = []
+    for label, value in data:
+        v = str(value) if value else "______________________________"
+        rows.append([Paragraph(label, styles["label"]), Paragraph(v, styles["value"])])
+    t = Table(rows, colWidths=[45*mm, 120*mm])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.5, BORDER),
+    ]))
+    return t
+
+
+def generate_complaint_pdf(incident_data: dict, recon_report: dict = None,
+                           forensic_path: str = "", config: dict = None,
+                           output_dir: str = "/var/log/cgs/forensics",
+                           country_code: str = "IE") -> str:
+    """Generates a country-adapted complaint PDF. Returns the file path."""
+    recon = recon_report or {}
+    geo = recon.get("geolocation", {})
+    whois = recon.get("whois", {})
+    rep = recon.get("reputation", {})
+    ports = recon.get("open_ports", [])
+    country = get_country(country_code)
+    styles = _styles()
+
+    inc_id = incident_data.get("id", "INC-UNKNOWN")
+    now = datetime.now()
+    filename = f"complaint_{inc_id}_{now.strftime('%Y%m%d_%H%M%S')}.pdf"
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, filename)
+
+    pagesize = LETTER if country_code == "US" else A4
+    doc = SimpleDocTemplate(filepath, pagesize=pagesize,
+                            leftMargin=20*mm, rightMargin=20*mm,
+                            topMargin=20*mm, bottomMargin=20*mm,
+                            title=f"Complaint - {inc_id}", author="CGS")
+
+    story = []
+    police = country["police"]
+    csirt = country["csirt"]
+
+    # ── HEADER ──
+    if country_code == "US":
+        title_text = "CYBERSECURITY INCIDENT REPORT"
+    elif country_code == "FR":
+        title_text = "RAPPORT D'INCIDENT DE CYBERSECURITE"
+    else:
+        title_text = "CYBERSECURITY INCIDENT REPORT"
+
+    story.append(Paragraph(title_text, styles["title"]))
+    story.append(Paragraph(
+        f"{country['flag']} {country['name']} — {police['name']}<br/>"
+        f"Ref: {inc_id} — {now.strftime('%d/%m/%Y %H:%M')}",
+        styles["subtitle"],
+    ))
+    story.append(HRFlowable(width="100%", thickness=1, color=BLUE, spaceAfter=4*mm))
+
+    story.append(Paragraph(
+        f"This document was automatically generated by CGS "
+        f"to accompany a formal report to {police['name']} ({police['unit']})."
+        if country_code != "FR" else
+        f"This document was automatically generated by CGS "
+        f"to accompany a formal complaint to {police['name']} ({police['unit']}).",
+        styles["body"],
+    ))
+
+    # ── 1. IDENTIFICATION ──
+    sec1 = "1. Complainant Identification" if country_code == "US" else "1. Identification du plaignant"
+    story.append(Paragraph(sec1, styles["heading"]))
+    story.append(Paragraph(
+        "<i>To be completed before filing:</i>" if country_code != "FR"
+        else "<i>A completer avant depot :</i>", styles["small"]))
+
+    id_fields = list(country["pdf_id_fields"])
+    id_fields.append(("Date", now.strftime("%d / %m / %Y")))
+    story.append(_info_table(id_fields, styles))
+
+    # ── 2. NATURE ──
+    sec2 = "2. Incident Details" if country_code == "US" else "2. Nature de l'incident"
+    story.append(Paragraph(sec2, styles["heading"]))
+    sev_labels = {1: "CRITICAL", 2: "HIGH", 3: "MEDIUM", 4: "LOW"} if country_code != "FR" else \
+                 {1: "CRITIQUE", 2: "ELEVE", 3: "MOYEN", 4: "FAIBLE"}
+    sev = incident_data.get("severity", 2)
+
+    story.append(_info_table([
+        ("Type", incident_data.get("threat_type", "")),
+        ("Severity" if country_code == "US" else "Severity", sev_labels.get(sev, "?")),
+        ("Reference", inc_id),
+        ("Detected" if country_code == "US" else "Detected le", incident_data.get("created", "")),
+        ("Target IP", incident_data.get("target_ip", "")),
+        ("Target host" if country_code == "US" else "Target host", incident_data.get("target_hostname", "")),
+        ("User" if country_code == "US" else "Utilisateur", incident_data.get("target_name", "")),
+    ], styles))
+
+    story.append(Spacer(1, 3*mm))
+    story.append(Paragraph(incident_data.get("threat_detail", "")[:1000], styles["body"]))
+
+    # ── 3. ATTAQUANT ──
+    sec3 = "3. Attacker Information" if country_code == "US" else "3. Identification de la source"
+    story.append(Paragraph(sec3, styles["heading"]))
+
+    story.append(_info_table([
+        ("IP", recon.get("target_ip", incident_data.get("attacker_ip", ""))),
+        ("Reverse DNS", recon.get("reverse_dns", "—")),
+        ("Country" if country_code == "US" else "Pays",
+         f"{geo.get('country', '')} ({geo.get('country_code', '')})"),
+        ("City" if country_code == "US" else "Ville",
+         f"{geo.get('city', '')}, {geo.get('region', '')}"),
+        ("GPS", f"{geo.get('lat', '')}, {geo.get('lon', '')}"),
+        ("ISP" if country_code == "US" else "FAI", geo.get("isp", "")),
+        ("Organization" if country_code == "US" else "Organisation", whois.get("org", "")),
+        ("ASN", f"AS{whois.get('asn', '?')}"),
+        ("Net range" if country_code == "US" else "Network range", whois.get("netrange", "")),
+        ("Abuse contact", whois.get("abuse_contact", "")),
+        ("OS", recon.get("os_fingerprint", "")),
+        ("Proxy/VPN/Tor", "Yes" if geo.get("proxy") or geo.get("hosting") else "No"),
+    ], styles))
+
+    if ports:
+        story.append(Paragraph(
+            ", ".join(f"{p['port']}/{p.get('service','?')}" for p in ports[:20]), styles["mono"]))
+
+    if rep.get("summary"):
+        story.append(Paragraph(rep["summary"][:500], styles["body"]))
+
+    # ── 4. CHRONOLOGIE ──
+    story.append(PageBreak())
+    sec4 = "4. Timeline" if country_code == "US" else "4. Timeline"
+    story.append(Paragraph(sec4, styles["heading"]))
+
+    tl_rows = [["Event" if country_code == "US" else "Event",
+                "Detail" if country_code == "US" else "Detail"]]
+    fmt = lambda k: incident_data.get(k, "—") or "—"
+    tl_rows.append(["Detection" if country_code == "US" else "Detection", fmt("created")])
+    if incident_data.get("approved_at"):
+        tl_rows.append(["Approved" if country_code == "US" else "Approved",
+                        f"{fmt('approved_at')} — {incident_data.get('approved_by', '?')}"])
+    if incident_data.get("shutdown_detected_at"):
+        tl_rows.append(["Host shutdown" if country_code == "US" else "Host shutdown",
+                        fmt("shutdown_detected_at")])
+    for a in incident_data.get("actions_executed", []):
+        tl_rows.append(["Defense action" if country_code == "US" else "Action", a[:200]])
+    if incident_data.get("resolved"):
+        tl_rows.append(["Resolution" if country_code == "US" else "Resolution",
+                        incident_data.get("resolution", "")])
+
+    tl = Table([[Paragraph(c, styles["label"]) for c in r] for r in tl_rows],
+               colWidths=[40*mm, 125*mm])
+    tl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BLUE), ("TEXTCOLOR", (0, 0), (-1, 0), white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.5, BORDER),
+    ]))
+    story.append(tl)
+
+    # ── 5. ACTIONS ──
+    sec5 = "5. Defense Actions" if country_code == "US" else "5. Defense actions"
+    story.append(Paragraph(sec5, styles["heading"]))
+    for a in incident_data.get("actions_executed", []) or ["None" if country_code == "US" else "None"]:
+        story.append(Paragraph(f"• {a}", styles["body"]))
+
+    # ── 6. PREUVES ──
+    sec6 = "6. Available Evidence" if country_code == "US" else "6. Preuves disponibles"
+    story.append(Paragraph(sec6, styles["heading"]))
+    evidence = [
+        "Complete forensic JSON file (timeline, alerts, flows, DNS, recon, IOCs)"
+        if country_code == "US" else
+        "Fichier forensique JSON complet (timeline, alertes, flux, DNS, recon, IOCs)",
+        "CGS system logs" if country_code == "US" else "CGS system logs",
+        "SQLite event database" if country_code == "US" else "SQLite event database",
+        "Defense audit log (JSONL)" if country_code == "US" else "Defense audit log (JSONL)",
+    ]
+    if forensic_path:
+        evidence.insert(0, os.path.basename(forensic_path))
+    for e in evidence:
+        story.append(Paragraph(f"• {e}", styles["body"]))
+
+    # ── 7. IMPACT ──
+    sec7 = "7. Impact Assessment" if country_code == "US" else "7. Impact estimated"
+    story.append(Paragraph(sec7, styles["heading"]))
+    story.append(_info_table(country["impact_fields"], styles))
+
+    # ── 8. DECLARATION ──
+    story.append(PageBreak())
+    sec8 = "8. Declaration" if country_code == "US" else "8. Declaration"
+    story.append(Paragraph(sec8, styles["heading"]))
+    story.append(Paragraph(country["pdf_declaration"], styles["legal"]))
+
+    for law in country["laws"]:
+        story.append(Paragraph(f"• {law}", styles["legal"]))
+
+    story.append(Spacer(1, 10*mm))
+    sig_label = "Name" if country_code == "US" else "Nom"
+    sig_fields = [(sig_label, ""), ("Date", now.strftime("%d / %m / %Y")), ("Signature", "")]
+    story.append(_info_table(sig_fields, styles))
+    story.append(Spacer(1, 20*mm))
+
+    # ── CONTACTS ──
+    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER, spaceAfter=4*mm))
+    story.append(Paragraph(
+        "Useful Contacts" if country_code == "US" else "Contacts utiles", styles["subheading"]))
+
+    contacts = [
+        (police["name"], police.get("phone", "")),
+        (csirt["name"], csirt.get("email", "")),
+    ]
+    if country.get("nis2", {}).get("applicable"):
+        contacts.append(("NIS2", country["nis2"]["contact"]))
+    contacts.append((country["dpa"]["name"], country["dpa"]["url"]))
+    if country.get("eu_portal"):
+        contacts.append(("Europol EC3", country["eu_portal"]["url"]))
+    if country.get("extra_resources"):
+        for k, r in country["extra_resources"].items():
+            contacts.append((r["name"], r.get("url", "")))
+
+    for name, detail in contacts:
+        story.append(Paragraph(f"<b>{name}</b> : {detail}", styles["small"]))
+
+    story.append(Spacer(1, 6*mm))
+    story.append(Paragraph(
+        f"Generated {now.strftime('%d/%m/%Y %H:%M')} — CGS — {inc_id}",
+        styles["small"]))
+
+    doc.build(story)
+    logger.info("PDF complaint generated: %s (%.1f KB)", filepath, os.path.getsize(filepath)/1024)
+    return filepath

@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  cgs:
+    build: .
+    container_name: cgs
+    restart: unless-stopped
+    network_mode: host        # Required for network monitoring
+    cap_add:
+      - NET_RAW               # Packet capture
+      - NET_ADMIN              # Firewall rules
+    volumes:
+      - cgs-data:/var/lib/cgs/data
+      - cgs-logs:/var/log/cgs
+      - cgs-config:/etc/cgs
+      - cgs-evidence:/opt/cgs/data/evidence
+    environment:
+      - CGS_LOG_LEVEL=INFO
+
+volumes:
+  cgs-data:
+  cgs-logs:
+  cgs-config:
+  cgs-evidence:
