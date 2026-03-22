@@ -291,8 +291,11 @@ def migrate_db():
 
 def init_db(data_dir: str):
     path = os.path.join(data_dir, "cgs.db")
+    if not db.is_closed():
+        db.close()
     db.init(path, pragmas={"journal_mode": "wal", "cache_size": -64_000,
-                           "synchronous": 1, "foreign_keys": 1})
+                           "synchronous": 1, "foreign_keys": 1,
+                           "busy_timeout": 5000})
     db.connect()
     db.create_tables(_ALL_TABLES)
     migrate_db()

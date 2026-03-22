@@ -1,0 +1,21 @@
+[run]
+source = core, analyzers, web, daemon
+omit =
+    # TUI module — requires interactive terminal, not testable in CI
+    core/tui.py
+    # Initial setup wizard — interactive prompts, not testable in CI
+    core/setup.py
+    # OS-level hardening — requires root and modifies system files
+    core/os_hardening.py
+    # Agent sensor — requires running agent infrastructure
+    core/agent_sensor.py
+    # Network discovery — requires raw sockets and live network
+    core/discovery.py
+    # Suricata ingest — requires Suricata running with eve.json
+    core/suricata_ingest.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__
+    raise NotImplementedError

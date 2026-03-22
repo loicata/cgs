@@ -1,5 +1,49 @@
-import os, sys, tempfile, pytest
+import os, sys, tempfile, threading, pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+# ── Prevent daemon thread accumulation during tests ──
+# Modules like RateLimiter, ClientNotificationQueue, ExtendedDetector etc.
+# spawn daemon background threads (GC loops, watchers) in __init__.
+# When hundreds of test instances are created, 100+ threads accumulate,
+# saturating the GIL and causing the test suite to hang.
+#
+# Fix: monkey-patch Thread.__init__ to neuter known background daemon threads
+# so they return immediately when started.
+
+_original_thread_init = threading.Thread.__init__
+
+_NOOP_THREAD_NAMES = frozenset({
+    "rate-limiter-gc", "client-queue-gc", "rules-watch",
+    "inc-timeout", "defense-gc", "defense-verify",
+    "hardening-gc", "killchain-gc", "sniffer",
+    "sniffer-analyze", "sniffer-flush", "threat-feed-refresh",
+    "safety-monitor", "event-processor",
+})
+
+
+def _patched_thread_init(self, *args, **kwargs):
+    _original_thread_init(self, *args, **kwargs)
+    if self.daemon and self.name in _NOOP_THREAD_NAMES:
+        self._target = lambda *a, **kw: None
+
+
+threading.Thread.__init__ = _patched_thread_init
+
+
+_exit_code = 0
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session, exitstatus):
+    """Record exit status for forced exit in unconfigure."""
+    global _exit_code
+    _exit_code = exitstatus
+
+
+def pytest_unconfigure(config):
+    """Force process exit to prevent any residual daemon threads from hanging."""
+    os._exit(_exit_code)
 
 # Create app ONCE at module level to avoid Blueprint re-registration
 _app = None

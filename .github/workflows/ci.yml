@@ -36,9 +36,10 @@ jobs:
           pip install pytest pytest-cov pytest-timeout bandit pip-audit
 
       - name: Run tests with coverage
+        timeout-minutes: 5
         run: |
           python -m pytest tests/ \
-            --cov=core --cov=analyzers --cov=web --cov=daemon \
+            --cov --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80 \

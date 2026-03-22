@@ -518,10 +518,12 @@ class TestSignalHandler:
         d = _make_daemon(tmp_cfg)
         d.identity.save_all = MagicMock()
         d.sniffer.stop = MagicMock()
-        with patch.object(d, 'stop', side_effect=SystemExit(0)) as mock_stop:
-            with pytest.raises(SystemExit):
-                d._sig(15, None)
-            mock_stop.assert_called_once()
+        with patch("threading.Timer") as mock_timer:
+            mock_timer.return_value.daemon = True
+            with patch.object(d, 'stop', side_effect=SystemExit(0)) as mock_stop:
+                with pytest.raises(SystemExit):
+                    d._sig(15, None)
+                mock_stop.assert_called_once()
 
 
 # ══════════════════════════════════════════════════
