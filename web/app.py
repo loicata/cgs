@@ -55,11 +55,10 @@ def init_app(config, modules):
     from web.routes_compliance import compliance_bp
     from web.routes_grc import grc_bp
     from web.routes_admin import admin_bp
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(monitoring_bp)
-    app.register_blueprint(compliance_bp)
-    app.register_blueprint(grc_bp)
-    app.register_blueprint(admin_bp)
+    registered = {bp.name for bp in app.iter_blueprints()}
+    for bp in (auth_bp, monitoring_bp, compliance_bp, grc_bp, admin_bp):
+        if bp.name not in registered:
+            app.register_blueprint(bp)
     return app, socketio
 
 

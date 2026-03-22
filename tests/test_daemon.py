@@ -49,6 +49,13 @@ def fresh_db(tmp_path):
         db.close()
 
 
+@pytest.fixture(autouse=True)
+def _stop_all_patches():
+    """Ensure all unittest.mock patches are stopped after each test."""
+    yield
+    patch.stopall()
+
+
 _PATCHES = [
     "core.sniffer.PacketSniffer",
     "core.discovery.NetworkDiscovery",
